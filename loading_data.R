@@ -23,7 +23,7 @@ library(tidyverse)
 # # write the combined tracking data object into a parquet file
 # library(arrow)
 # arrow::write_parquet(tracking, "data/post_throw_tracking.parquet")
-
+# 
 # tracking2 <- read_csv("data/train/input_2023_w01.csv") |>
 #   bind_rows(read_csv("data/train/input_2023_w02.csv")) |>
 #   bind_rows(read_csv("data/train/input_2023_w03.csv")) |>
@@ -44,11 +44,10 @@ library(tidyverse)
 #   bind_rows(read_csv("data/train/input_2023_w18.csv"))
 # 
 # # write the combined tracking data object into a parquet file
-# library(arrow)
 # arrow::write_parquet(tracking2, "data/pre_throw_tracking.parquet")
 
+library(arrow)
 post_throw <- arrow::read_parquet("data/post_throw_tracking.parquet")
 pre_throw <- arrow::read_parquet("data/pre_throw_tracking.parquet")
-supplement <- read_csv("data/supplementary_data.csv")
-
-glimpse(supplement)
+# supplement <- read_csv("data/supplementary_data.csv")
+# glimpse(supplement)
