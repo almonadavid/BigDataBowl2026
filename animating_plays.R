@@ -2,21 +2,10 @@
 
 # https://www.kaggle.com/code/pablollanderos33/generate-play-animations-with-ggplot/notebook
 
-## Getting team colors
-fetch_team_colors <- function() {
-  team_colors <- suppressMessages(readr::read_tsv("https://raw.githubusercontent.com/asonty/ngs_highlights/master/utils/data/nfl_team_colors.tsv"))
-  # add football color
-  team_colors = rbind(team_colors, c("football","#935e38","black","#935e38"))
-  return(team_colors)
-}
-team_colors <- fetch_team_colors()
 
 fetch_play <- function(df, playid, gameid) {
-  # Function that returns a play dataframe with its correspondent information
   play <- df |> 
-    filter(game_id == gameid & play_id == playid) |> 
-    # left_join(plays, by = c("play_id" = "play_id", "game_id" = "game_id")) |> 
-    left_join(team_colors, by = c("possession_team"="teams"))
+    filter(game_id == gameid & play_id == playid)
   return(play)
 }
 
@@ -32,16 +21,13 @@ plot_field <- function(field_color="#00b140", line_color = "#ffffff") {
       plot.title = element_text(size = 13, hjust = 0.5),
       plot.subtitle = element_text(hjust = 1),
       legend.position = "bottom",
-      # legend.title = element_text(color = "#212529", size = 12, vjust = 1),
       legend.title.align = 1,
-      # legend.text = element_text(color = "#343a40", size = 10),
       panel.grid.major = element_blank(),
       panel.grid.minor = element_blank(),
       axis.title = element_blank(),
       axis.ticks = element_blank(),
       axis.text = element_blank(),
       axis.line = element_blank(),
-      # panel.background = element_blank(),
       panel.background = element_rect(fill = field_color, color = "white"),
       panel.border = element_blank(),
       aspect.ratio = field_height/field_width
@@ -75,7 +61,7 @@ plot_field <- function(field_color="#00b140", line_color = "#ffffff") {
       label = c(seq(10, 50, by = 10), rev(seq(10, 40, by = 10))),
       size = 7,
       family = "mono",
-      colour = line_color, # "#495057",
+      colour = line_color
     ) +
     
     # yard numbers upside down
@@ -87,15 +73,11 @@ plot_field <- function(field_color="#00b140", line_color = "#ffffff") {
       angle = 180,
       size = 7,
       family = "mono",
-      colour = line_color, 
+      colour = line_color
     )
   
   return(field)
 }
-
-
-plot_field()
-
 
 ## Plotting one frame of a play
 plot_frame <- function(one_play, frame, plot_vel = F) {
@@ -151,7 +133,7 @@ plot_frame <- function(one_play, frame, plot_vel = F) {
       geom_segment(
         data = fr,
         mapping = aes(x = x, y = y, xend = x + v_x, yend = y + v_y, color =color1 ),
-        size = 1, arrow = arrow(length = unit(0.1, "cm"))
+        linewidth = 1, arrow = arrow(length = unit(0.1, "cm"))
       ) + 
       scale_colour_manual(values = colores) +
       labs(
@@ -191,17 +173,133 @@ plot_frame <- function(one_play, frame, plot_vel = F) {
 }
 
 # ---- establish game and play to plot ----
-playid = 101
+playid = 461 # YT timestamp 0:32
 gameid = 2023090700
+# YT link: https://youtu.be/J4DoMjut2aQ
 #-------------------------------------------
 
 # exctract play df ----
 play <- fetch_play(pre_throw, playid, gameid)
 
-print(supplement$play_description[1])
+print(play$play_description[1])
 
 # plot a specific frame ----
 plot_frame(play, 1, TRUE)
 
 
 ## Animating a play
+play_animation <- function(one_play, plot_vel = F) {
+  
+  # Check for data
+  if(is.null(one_play)) {
+    print("error: need to provide play data")
+    return()
+  }
+  
+  # * get play metadata ----
+  play_desc <- one_play$play_description[1]
+  play_dir <- one_play$play_direction[1]
+  yards_togo <- one_play$yards_to_go[1]
+  los <- one_play$absolute_yardline_number[1]
+  togo_line <- if(play_dir=="left") los-yards_togo else los+yards_togo
+  
+  colores <- unique(one_play$color1)
+  names(colores) <- colores
+  
+  #  velocity angle in radians
+  one_play$dir_rad <- one_play$dir * pi / 180
+  
+  #  velocity components
+  one_play$v_x <- sin(one_play$dir_rad) * one_play$s
+  one_play$v_y <- cos(one_play$dir_rad) * one_play$s
+  
+  if (plot_vel == T) {
+    anim <- plot_field() +
+      # line of scrimmage
+      annotate(
+        "segment",
+        x = los, xend = los, y = 0, yend = 160/3,
+        colour = "#0d41e1"
+      ) +
+      # 1st down marker
+      annotate(
+        "segment",
+        x = togo_line, xend = togo_line, y = 0, yend = 160/3,
+        colour = "#f9c80e"
+      )+
+      geom_point(
+        data = one_play,
+        mapping = aes(x = x, y = y, color = color1),
+        size = 4
+      ) +
+      geom_segment(
+        data = one_play,
+        mapping = aes(x = x, y = y, xend = x + v_x, yend = y + v_y, color = color1),
+        linewidth = 1, arrow = arrow(length = unit(0.01, "npc"))
+      ) + 
+      scale_colour_manual(values = colores) +
+      labs(
+        title = play_desc,
+        caption = "Data: Big Data Bowl 2026"
+      ) +
+      theme(legend.position="none") +
+      # animation stuff
+      transition_time(frame_id) +
+      ease_aes('linear')
+  }
+  
+  else {
+    anim <- plot_field() +
+      # line of scrimmage
+      annotate(
+        "segment",
+        x = los, xend = los, y = 0, yend = 160/3,
+        colour = "#0d41e1"
+      ) +
+      # 1st down marker
+      annotate(
+        "segment",
+        x = togo_line, xend = togo_line, y = 0, yend = 160/3,
+        colour = "#f9c80e"
+      )+
+      geom_point(
+        data = one_play,
+        mapping = aes(x = x, y = y, color = color1),
+        size = 4
+      ) +
+      scale_colour_manual(values = colores) +
+      labs(
+        title = play_desc,
+        caption = "Data: Big Data Bowl 2026"
+      ) +
+      theme(legend.position="none") +
+      # animation stuff
+      transition_time(frame_id) +
+      ease_aes('linear')
+  }
+  return(anim)
+}
+
+
+# *ensure length of play matches number of frames
+play_length <- length(unique(play$frame_id))
+
+# customize duration of gif
+duration = 7
+
+# Animate our play
+p_anim <- animate(
+  play_animation(play, plot_vel = T),
+  duration = duration,
+  fps = 10, 
+  nframes = play_length,
+  width = 850,
+  height = 450,
+  end_pause = 10,
+  renderer = gifski_renderer()
+)
+p_anim
+
+anim_save("play.gif", p_anim)
+# anim_save("play_TRUE.gif", p_anim)
+
