@@ -173,9 +173,9 @@ plot_frame <- function(one_play, frame, plot_vel = F) {
 }
 
 # ---- establish game and play to plot ----
-playid = 461 # YT timestamp 0:32
-gameid = 2023090700
-# YT link: https://youtu.be/J4DoMjut2aQ
+playid = 1154 # YT timestamp ...
+gameid = 	2023090700
+# YT link: ...
 #-------------------------------------------
 
 # exctract play df ----
@@ -291,7 +291,7 @@ duration = 7
 p_anim <- animate(
   play_animation(play, plot_vel = T),
   duration = duration,
-  fps = 10, 
+  fps = 15, 
   nframes = play_length,
   width = 850,
   height = 450,
