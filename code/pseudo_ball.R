@@ -5,8 +5,9 @@ df <- pre_throw |>
   filter(player_position == "QB") |>
   group_by(game_id, play_id) |> 
   slice_tail(n = 1) |>
+  mutate(last_frame_id = max(frame_id)) |> 
   ungroup() |> 
-  select(game_id, play_id, nfl_id, x, y, ball_land_x, ball_land_y, num_frames_output) |> 
+  select(game_id, play_id, nfl_id, last_frame_id, x, y, ball_land_x, ball_land_y, num_frames_output) |> 
   mutate(nfl_id = NA_real_)
 
 get_pseudo_trajectory <- function(df, g = 9.81) {
@@ -17,8 +18,8 @@ get_pseudo_trajectory <- function(df, g = 9.81) {
   
   df |>
     mutate(flight_duration = num_frames_output * 0.1) |>
-    pmap_dfr(function(game_id, play_id, nfl_id, x, y, ball_land_x, ball_land_y, num_frames_output, flight_duration, ...) {
-      time_sequence <- seq(0, flight_duration, by = 0.1)
+    pmap_dfr(function(game_id, play_id, nfl_id, last_frame_id, x, y, ball_land_x, ball_land_y, num_frames_output, flight_duration, ...) {
+      time_sequence <- seq(0, flight_duration - 0.1, by = 0.1)
       
       vx_initial <- (ball_land_x - x) / flight_duration
       vy_initial <- (ball_land_y - y + 0.5 * g * flight_duration^2) / flight_duration
@@ -30,7 +31,7 @@ get_pseudo_trajectory <- function(df, g = 9.81) {
         game_id = game_id,
         play_id = play_id,
         nfl_id = nfl_id,
-        frame_id = 0:(length(time_sequence) - 1),
+        frame_id = seq(last_frame_id + 1, last_frame_id + num_frames_output),
         x = round(x_vals, 2),
         y = round(y_vals, 2)
       )
@@ -62,8 +63,6 @@ pre_throw <- bind_rows(pre_throw, pre_throw_psuedo_ball) |>
 
 
 # next: 
-# join pre_throw and post_throw
-# filter for player_to_predict = TRUE
 # use field_control.R
 #
 

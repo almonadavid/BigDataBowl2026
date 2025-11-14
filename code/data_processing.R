@@ -6,55 +6,8 @@ library(cowplot)
 library(arrow)
 library(sportyR)
 
-## Read Data
 
-# tracking <- read_csv("data/train/output_2023_w01.csv") |>
-#   bind_rows(read_csv("data/train/output_2023_w02.csv")) |>
-#   bind_rows(read_csv("data/train/output_2023_w03.csv")) |>
-#   bind_rows(read_csv("data/train/output_2023_w04.csv")) |>
-#   bind_rows(read_csv("data/train/output_2023_w05.csv")) |>
-#   bind_rows(read_csv("data/train/output_2023_w06.csv")) |>
-#   bind_rows(read_csv("data/train/output_2023_w07.csv")) |>
-#   bind_rows(read_csv("data/train/output_2023_w08.csv")) |>
-#   bind_rows(read_csv("data/train/output_2023_w09.csv")) |>
-#   bind_rows(read_csv("data/train/output_2023_w10.csv")) |>
-#   bind_rows(read_csv("data/train/output_2023_w11.csv")) |>
-#   bind_rows(read_csv("data/train/output_2023_w12.csv")) |>
-#   bind_rows(read_csv("data/train/output_2023_w13.csv")) |>
-#   bind_rows(read_csv("data/train/output_2023_w14.csv")) |>
-#   bind_rows(read_csv("data/train/output_2023_w15.csv")) |>
-#   bind_rows(read_csv("data/train/output_2023_w16.csv")) |>
-#   bind_rows(read_csv("data/train/output_2023_w17.csv")) |>
-#   bind_rows(read_csv("data/train/output_2023_w18.csv"))
-# 
-# # write the combined tracking data object into a parquet file
-# library(arrow)
-# arrow::write_parquet(tracking, "data/post_throw_tracking.parquet")
-# 
-# tracking2 <- read_csv("data/train/input_2023_w01.csv") |>
-#   bind_rows(read_csv("data/train/input_2023_w02.csv")) |>
-#   bind_rows(read_csv("data/train/input_2023_w03.csv")) |>
-#   bind_rows(read_csv("data/train/input_2023_w04.csv")) |>
-#   bind_rows(read_csv("data/train/input_2023_w05.csv")) |>
-#   bind_rows(read_csv("data/train/input_2023_w06.csv")) |>
-#   bind_rows(read_csv("data/train/input_2023_w07.csv")) |>
-#   bind_rows(read_csv("data/train/input_2023_w08.csv")) |>
-#   bind_rows(read_csv("data/train/input_2023_w09.csv")) |>
-#   bind_rows(read_csv("data/train/input_2023_w10.csv")) |>
-#   bind_rows(read_csv("data/train/input_2023_w11.csv")) |>
-#   bind_rows(read_csv("data/train/input_2023_w12.csv")) |>
-#   bind_rows(read_csv("data/train/input_2023_w13.csv")) |>
-#   bind_rows(read_csv("data/train/input_2023_w14.csv")) |>
-#   bind_rows(read_csv("data/train/input_2023_w15.csv")) |>
-#   bind_rows(read_csv("data/train/input_2023_w16.csv")) |>
-#   bind_rows(read_csv("data/train/input_2023_w17.csv")) |>
-#   bind_rows(read_csv("data/train/input_2023_w18.csv"))
-# 
-# # write the combined tracking data object into a parquet file
-# arrow::write_parquet(tracking2, "data/pre_throw_tracking.parquet")
-
-
-# BDB Data
+## BDB Data
 post_throw <- arrow::read_parquet("data/post_throw_tracking.parquet")
 pre_throw <- arrow::read_parquet("data/pre_throw_tracking.parquet")
 supplement <- read_csv("data/supplementary_data.csv")
@@ -63,11 +16,14 @@ supplement <- read_csv("data/supplementary_data.csv")
 team_colors <- suppressMessages(readr::read_tsv("https://raw.githubusercontent.com/asonty/ngs_highlights/master/utils/data/nfl_team_colors.tsv"))
 team_colors <- rbind(team_colors, c("football","#935e38","black","#935e38"))
 
-## Standardizing tracking data
+## Standardizing tracking data & join with supplementary data
 pre_throw <- pre_throw |>
   mutate(
     x = ifelse(play_direction == "left", 120 - x, x),
     y = ifelse(play_direction == "left", 160 / 3 - y, y),
+    ball_land_x = ifelse(play_direction == "left", 120 - ball_land_x, ball_land_x),
+    ball_land_y = ifelse(play_direction == "left", 160 / 3 - ball_land_y, ball_land_y),
+    absolute_yardline_number = ifelse(play_direction == "left", 120 - absolute_yardline_number, absolute_yardline_number),
     dir = ifelse(play_direction == "left", dir + 180, dir),
     dir = ifelse(dir > 360, dir - 360, dir),
     o = ifelse(play_direction == "left", o + 180, o),
@@ -78,7 +34,7 @@ pre_throw <- pre_throw |>
   left_join(team_colors, by = c("player_team" = "teams"))
   # group_by(game_id, play_id) |>
   # mutate(
-  #   last_frame = ifelse(frame_id == max(frame_id), 1, 0)
+  #   throw_frame = ifelse(frame_id == max(frame_id), 1, 0)
   # ) |>
   # ungroup()
 
@@ -101,6 +57,64 @@ post_throw <- post_throw |>
   ungroup() |> select(-dx, -dy) |> relocate(s, a, dir, .after = y) |>
   left_join(supplement, by = c('game_id', 'play_id', 'season')) |>
   left_join(team_colors, by = c("player_team" = "teams"))
+
+
+# modifying the post_throw frame_id to continue from the last pre_throw frame_id
+frame_lookup <- pre_throw |>
+  group_by(game_id, play_id) |>
+  summarise(last_pre_frame = max(frame_id), .groups = "drop")
+
+post_throw <- post_throw |>
+  left_join(frame_lookup, by = c("game_id", "play_id")) |>
+  mutate(frame_id = frame_id + last_pre_frame) |>
+  select(-last_pre_frame)
+
+
+
+## Extrapolate the ball's play-by-play coordinates
+source('pseudo_ball.R')
+
+
+## Join pre_throw and post_throw
+full_df <- pre_throw |> 
+  filter(player_to_predict == TRUE) |> 
+  select(-player_to_predict, -player_birth_date, -o, -num_frames_output, -ball_land_x, -ball_land_y) |> 
+  bind_rows(post_throw) |> 
+  arrange(game_id, play_id, nfl_id, frame_id) |> 
+  group_by(game_id, play_id, nfl_id) |>
+  mutate(
+    s = ifelse(is.na(s) & !is.na(nfl_id), round(sqrt((x - lag(x))^2 + (y - lag(y))^2) * 10, 2), s),
+    a = ifelse(is.na(a) & !is.na(nfl_id), round((s - lag(s)) * 10, 2), a),
+    dir = ifelse(is.na(dir) & !is.na(nfl_id), round((90 - (atan2((y - lag(y)), (x - lag(x))) * 180 / pi)) %% 360, 2), dir)
+  )
+
+
+
+##
+all_description <- pre_throw |> group_by(game_id, play_id) |> slice(1) |> ungroup() |> select(game_id, play_id, play_description)
+
+##
+
+# one last thing, since i'm joining pre_throw and post_throw, i wanted to add an indicator for the last frame of pre_throw (when the QB releases) [and maybe even one for 0.2s/2 frames] before release] i case I need it for future analysis.  if i can just lag(2) on the last_frame indicator to get the 2 frames before then there wont be any need for another indicator. if not, it wouldnt hurt.
+# 
+# and also the best place in the enter sequence to add it such that there's no errors when i bind_rows with post_throw.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ## Sumer supp. data

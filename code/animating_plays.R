@@ -96,7 +96,7 @@ plot_frame <- function(one_play, frame, plot_vel = F) {
   play_dir <- one_play$play_direction[1]
   yards_togo <- one_play$yards_to_go[1]
   los <- one_play$absolute_yardline_number[1]
-  togo_line <- if(play_dir=="left") los-yards_togo else los+yards_togo
+  togo_line <- los + yards_togo
   
   fr <- one_play  |>  
     filter(frame_id == frame)
@@ -173,13 +173,13 @@ plot_frame <- function(one_play, frame, plot_vel = F) {
 }
 
 # ---- establish game and play to plot ----
-playid = 1154 # YT timestamp ...
+playid = 736 # YT timestamp ... 1154
 gameid = 	2023090700
 # YT link: ...
 #-------------------------------------------
 
 # exctract play df ----
-play <- fetch_play(pre_throw, playid, gameid)
+play <- fetch_play(full_df, playid, gameid)
 
 print(play$play_description[1])
 
@@ -201,7 +201,7 @@ play_animation <- function(one_play, plot_vel = F) {
   play_dir <- one_play$play_direction[1]
   yards_togo <- one_play$yards_to_go[1]
   los <- one_play$absolute_yardline_number[1]
-  togo_line <- if(play_dir=="left") los-yards_togo else los+yards_togo
+  togo_line <- los + yards_togo
   
   colores <- unique(one_play$color1)
   names(colores) <- colores
@@ -285,7 +285,7 @@ play_animation <- function(one_play, plot_vel = F) {
 play_length <- length(unique(play$frame_id))
 
 # customize duration of gif
-duration = 7
+duration = 10
 
 # Animate our play
 p_anim <- animate(
