@@ -173,8 +173,8 @@ plot_frame <- function(one_play, frame, plot_vel = F) {
 }
 
 # ---- establish game and play to plot ----
-playid = 736 # YT timestamp ... 1154
-gameid = 	2023090700
+playid = 736 #1704 # YT timestamp ... 
+gameid = 	2023090700 #2023092403
 # YT link: ...
 #-------------------------------------------
 
@@ -227,16 +227,23 @@ play_animation <- function(one_play, plot_vel = F) {
         x = togo_line, xend = togo_line, y = 0, yend = 160/3,
         colour = "#f9c80e"
       ) +
+      # Trail points w/ no border
       geom_point(
-        data = one_play, 
-        mapping = aes(x = x, y = y, color = color1), 
-        size = 4 
-        ) +
+        data = one_play,
+        mapping = aes(x = x, y = y, fill = color1, color = color1),  # color too for trail
+        size = 4, shape = 21, stroke = 0
+      ) +
+      geom_point(
+        data = one_play,
+        mapping = aes(x = x, y = y, fill = color1),
+        size = 4, shape = 21, color = 'black', stroke = 0.6
+      ) +
       geom_segment(
         data = one_play,
         mapping = aes(x = x, y = y, xend = x + v_x, yend = y + v_y, color = color1),
         linewidth = 1, arrow = arrow(length = unit(0.01, "npc"))
       ) + 
+      scale_fill_manual(values = colores) +
       scale_colour_manual(values = colores) +
       labs(
         title = play_desc,
@@ -245,7 +252,9 @@ play_animation <- function(one_play, plot_vel = F) {
       theme(legend.position="none") +
       # animation stuff
       transition_time(frame_id) +
-      ease_aes('linear')
+      ease_aes('linear') +
+      shadow_trail(distance = 0.01, alpha = 0.6, size = 1.5, exclude_layer = c(8, 9))
+    # shadow_wake(wake_length = 1, size = FALSE, alpha = 0.2, exclude_layer = 8, wrap = FALSE)
   }
   
   else {
@@ -275,7 +284,8 @@ play_animation <- function(one_play, plot_vel = F) {
       theme(legend.position="none") +
       # animation stuff
       transition_time(frame_id) +
-      ease_aes('linear')
+      ease_aes('linear') +
+      shadow_mark(linetype = 'solid', size = 0.75)
   }
   return(anim)
 }

@@ -215,36 +215,33 @@ play_animation <- function(one_play, plot_vel = F) {
   
   if (plot_vel == T) {
     anim <- plot_field() +
-      # line of scrimmage
-      annotate(
-        "segment",
-        x = los, xend = los, y = 0, yend = 160/3,
-        colour = "#0d41e1"
+      annotate("segment", x = los, xend = los, y = 0, yend = 160/3, colour = "#0d41e1") +
+      annotate("segment", x = togo_line, xend = togo_line, y = 0, yend = 160/3, colour = "#f9c80e") +
+      # Manual trail with conditional linetype
+      geom_path(
+        data = one_play,
+        aes(x = x, y = y, group = nfl_id, color = color1, 
+            linetype = ifelse(pre_throw_frame == 1, "solid", "dotted")),  # ✅ This works!
+        linewidth = 1,
+        alpha = 0.3
       ) +
-      # 1st down marker
-      annotate(
-        "segment",
-        x = togo_line, xend = togo_line, y = 0, yend = 160/3,
-        colour = "#f9c80e"
-      ) +
+      # Current position points
       geom_point(
-        data = one_play, 
-        mapping = aes(x = x, y = y, color = color1), 
-        size = 4 
-        ) +
+        data = one_play,
+        aes(x = x, y = y, fill = color1),
+        size = 4, shape = 21, color = 'black', stroke = 0.5
+      ) +
       geom_segment(
         data = one_play,
-        mapping = aes(x = x, y = y, xend = x + v_x, yend = y + v_y, color = color1),
+        aes(x = x, y = y, xend = x + v_x, yend = y + v_y, color = color1),
         linewidth = 1, arrow = arrow(length = unit(0.01, "npc"))
       ) + 
+      scale_fill_manual(values = colores) +
       scale_colour_manual(values = colores) +
-      labs(
-        title = play_desc,
-        caption = "Data: Big Data Bowl 2026"
-      ) +
-      theme(legend.position="none") +
-      # animation stuff
-      transition_time(frame_id) +
+      scale_linetype_identity() +  # Use the actual linetype values
+      labs(title = play_desc, caption = "Data: Big Data Bowl 2026") +
+      theme(legend.position = "none") +
+      transition_reveal(frame_id) +  # Use reveal for growing paths
       ease_aes('linear')
   }
   
@@ -275,7 +272,8 @@ play_animation <- function(one_play, plot_vel = F) {
       theme(legend.position="none") +
       # animation stuff
       transition_time(frame_id) +
-      ease_aes('linear')
+      ease_aes('linear') +
+      shadow_mark(linetype = 'solid', size = 0.75)
   }
   return(anim)
 }

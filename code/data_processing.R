@@ -31,12 +31,15 @@ pre_throw <- pre_throw |>
   ) |>
   left_join(supplement, by = c('game_id', 'play_id')) |>
   mutate(player_team = ifelse(player_side == "Offense", possession_team, defensive_team)) |>
-  left_join(team_colors, by = c("player_team" = "teams"))
-  # group_by(game_id, play_id) |>
-  # mutate(
-  #   throw_frame = ifelse(frame_id == max(frame_id), 1, 0)
-  # ) |>
-  # ungroup()
+  left_join(team_colors, by = c("player_team" = "teams")) |> 
+  group_by(game_id, play_id) |>
+  mutate(
+    throw_frame = ifelse(frame_id == max(frame_id), 1, 0)
+  ) |>
+  ungroup() |> 
+  mutate(
+    pre_throw_frame = 1
+  )
 
 
 post_throw <- post_throw |>
@@ -72,7 +75,7 @@ post_throw <- post_throw |>
 
 
 ## Extrapolate the ball's play-by-play coordinates
-source('pseudo_ball.R')
+source('code/pseudo_ball.R')
 
 
 ## Join pre_throw and post_throw
@@ -85,111 +88,24 @@ full_df <- pre_throw |>
   mutate(
     s = ifelse(is.na(s) & !is.na(nfl_id), round(sqrt((x - lag(x))^2 + (y - lag(y))^2) * 10, 2), s),
     a = ifelse(is.na(a) & !is.na(nfl_id), round((s - lag(s)) * 10, 2), a),
-    dir = ifelse(is.na(dir) & !is.na(nfl_id), round((90 - (atan2((y - lag(y)), (x - lag(x))) * 180 / pi)) %% 360, 2), dir)
+    dir = ifelse(is.na(dir) & !is.na(nfl_id), round((90 - (atan2((y - lag(y)), (x - lag(x))) * 180 / pi)) %% 360, 2), dir),
+    throw_frame = ifelse(is.na(throw_frame), 0, throw_frame),
+    pre_throw_frame = ifelse(is.na(pre_throw_frame), 0, pre_throw_frame)
   )
 
 
-
 ##
-all_description <- pre_throw |> group_by(game_id, play_id) |> slice(1) |> ungroup() |> select(game_id, play_id, play_description)
+all_description <- full_df |> group_by(game_id, play_id) |> slice(1) |> ungroup() |> select(game_id, play_id, play_description)
 
-##
-
-# one last thing, since i'm joining pre_throw and post_throw, i wanted to add an indicator for the last frame of pre_throw (when the QB releases) [and maybe even one for 0.2s/2 frames] before release] i case I need it for future analysis.  if i can just lag(2) on the last_frame indicator to get the 2 frames before then there wont be any need for another indicator. if not, it wouldnt hurt.
-# 
-# and also the best place in the enter sequence to add it such that there's no errors when i bind_rows with post_throw.
+## Save full_df
+write_csv(full_df, 'data/main_data.csv')
 
 
 
-
-
+# ## Sumer supp. data
+# player_play_df <- arrow::read_parquet("data/sumer_coverages_player_play.parquet")
+# frame_df <- arrow::read_parquet("data/sumer_coverages_frame.parquet")
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-## Sumer supp. data
-player_play_df <- arrow::read_parquet("data/sumer_coverages_player_play.parquet")
-frame_df <- arrow::read_parquet("data/sumer_coverages_frame.parquet")
-
-## nflverse data
-library(nflreadr)
-
-dict <- nflreadr::dictionary_pbp
-# OR: https://nflreadr.nflverse.com/articles/dictionary_pbp.html
-
-pbp_pass <- load_pbp(c(2023)) |> # add 2024 & 2025
-  filter(play_type == "pass" & lateral_reception == 0) |> 
-  select(game_id = old_game_id, play_id, season, pass_length_cat = pass_length, pass_location, yards_after_catch, 
-         ep, epa, air_epa, yac_epa, xyac_epa, comp_air_epa, comp_yac_epa, wp, def_wp, home_wp, away_wp,
-         cp, cpoe) |> 
-  mutate(game_id = as.double(game_id))
-
-## Join BDB with nflverse
-pre_throw_updated <- left_join(pre_throw |> filter(season == 2023), pbp_pass, by = c('game_id', 'play_id', 'season')) |> 
-  mutate(pass_length_cat = ifelse(pass_length <= 15, 'short', 'deep'))
-
-# only deep balls
-deep_balls <- pre_throw_updated |> filter(pass_length_cat == 'deep')
-# deep_balls |> group_by(game_id, play_id) |> slice(1) |> pull(route_of_targeted_receiver) |> table()
-# deep_balls |> group_by(game_id, play_id) |> slice(1) |> pull(team_coverage_man_zone) |> table() |> prop.table()
-
-# filter out rows where the QB isn't the passer?
-
-
-
-# only pre-throw rows where `player_to_predict` == TRUE
-pre_throw_true <- pre_throw |> filter(player_to_predict == TRUE)
-
-post_throw_true <- left_join(post_throw, pre_throw |> select(game_id, play_id, color1, ))
-
-
-
-
-
-
-
-# speed_dist <- post_throw |> 
-#   group_by(game_id,play_id,nfl_id) |> 
-#   mutate(
-#     dist = sqrt((x - lag(x))^2 + (y - lag(y))^2),
-#     s = round(dist / 0.1, 2)
-#   ) #|> 
-#   # left_join(
-#   #   supplement |> select(game_id, play_id, play_description, route_of_targeted_receiver), 
-#   #   by = c('game_id', 'play_id'))
-
-# add route type, then facet wrap by route type
-
-
-
-
-
-
-# tracking <- tracking |> 
-#   mutate(all_ids = paste(game_id, play_id, nfl_id),
-#          game_play_id = paste(game_id, play_id))
-
-
-
-
-
-# idea: how a receiver adjusts to the flight of the ball once they turn.
-# figure out how orientation is measured...from head? neck? torso? hips?
-# catch probability?
-# landing zone predicition?
-# 
-
-# # filtering pre_throw for player to predict
-# test <- pre_throw |> 
-#   filter(player_to_predict) |> 
-#   distinct(game_id, play_id, nfl_id, .keep_all = TRUE)
