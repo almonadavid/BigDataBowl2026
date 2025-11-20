@@ -2,7 +2,7 @@
 
 # https://www.kaggle.com/code/pablollanderos33/generate-play-animations-with-ggplot/notebook
 
-
+ 
 fetch_play <- function(df, playid, gameid) {
   play <- df |> 
     filter(game_id == gameid & play_id == playid)

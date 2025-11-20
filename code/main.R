@@ -34,7 +34,7 @@ test <- left_join(main_data |> select(-season), pbp_pass, by = c('game_id', 'pla
 
 
 # only deep balls
-deep_balls <- test |> filter(pass_length_cat == 'deep')
+deep_balls <- test |> filter(pass_length_cat == 'deep') 
 # deep_balls |> group_by(game_id, play_id) |> slice(1) |> pull(route_of_targeted_receiver) |> table()
 # deep_balls |> group_by(game_id, play_id) |> slice(1) |> pull(team_coverage_man_zone) |> table() |> prop.table()
 
