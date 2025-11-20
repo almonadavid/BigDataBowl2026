@@ -89,13 +89,16 @@ full_df <- pre_throw |>
     s = ifelse(is.na(s) & !is.na(nfl_id), round(sqrt((x - lag(x))^2 + (y - lag(y))^2) * 10, 2), s),
     a = ifelse(is.na(a) & !is.na(nfl_id), round((s - lag(s)) * 10, 2), a),
     dir = ifelse(is.na(dir) & !is.na(nfl_id), round((90 - (atan2((y - lag(y)), (x - lag(x))) * 180 / pi)) %% 360, 2), dir),
+    dir_rad = pi * (dir / 180),
+    dir_x = ifelse(is.na(nfl_id), NA_real_, sin(dir_rad)),
+    dir_y = ifelse(is.na(nfl_id), NA_real_, cos(dir_rad)),
+    s_x = round(dir_x * s, 2),
+    s_y = round(dir_y * s, 2),
+    a_x = round(dir_x * a, 2),
+    a_y = round(dir_y * a, 2),
     throw_frame = ifelse(is.na(throw_frame), 0, throw_frame),
     pre_throw_frame = ifelse(is.na(pre_throw_frame), 0, pre_throw_frame)
-  )
-
-
-##
-all_description <- full_df |> group_by(game_id, play_id) |> slice(1) |> ungroup() |> select(game_id, play_id, play_description)
+  ) |> relocate(dir_rad, dir_x, dir_y, s_x, s_y, a_x, a_y, .after = dir)
 
 ## Save full_df
 write_csv(full_df, 'data/main_data.csv')

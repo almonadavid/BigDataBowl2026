@@ -173,7 +173,7 @@ plot_frame <- function(one_play, frame, plot_vel = F) {
 }
 
 # ---- establish game and play to plot ----
-playid = 736 # YT timestamp ... 1154
+playid = 1154 # YT timestamp ... 736
 gameid = 	2023090700
 # YT link: ...
 #-------------------------------------------
@@ -300,6 +300,6 @@ p_anim <- animate(
 )
 p_anim
 
-anim_save("play.gif", p_anim)
+anim_save("play_no_trails.gif", p_anim)
 # anim_save("play_TRUE.gif", p_anim)
 

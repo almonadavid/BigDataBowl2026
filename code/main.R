@@ -9,6 +9,8 @@ library(sportyR)
 
 main_data <- read_csv('data/main_data.csv')
 
+all_description <- main_data |> group_by(game_id, play_id) |> slice(1) |> ungroup() |> select(game_id, play_id, play_description)
+
 
 ## nflverse data
 library(nflreadr)
@@ -24,8 +26,11 @@ pbp_pass <- load_pbp(c(2023)) |> # add 2024 & 2025
   mutate(game_id = as.double(game_id))
 
 ## Join BDB with nflverse
-test <- left_join(main_data |> filter(season == 2023), pbp_pass, by = c('game_id', 'play_id', 'season')) |> 
+test <- left_join(main_data |> select(-season), pbp_pass, by = c('game_id', 'play_id')) |> 
   mutate(pass_length_cat = ifelse(pass_length <= 15, 'short', 'deep'))
+
+# test <- left_join(main_data |> filter(season == 2023), pbp_pass, by = c('game_id', 'play_id', 'season')) |> 
+#   mutate(pass_length_cat = ifelse(pass_length <= 15, 'short', 'deep'))
 
 
 # only deep balls

@@ -11,7 +11,7 @@ fetch_play <- function(df, playid, gameid) {
 
 
 ## Plotting the field
-plot_field <- function(field_color="#00b140", line_color = "#ffffff") {
+plot_field <- function(field_color="#ffffff", line_color = "#000000") {
   field_height <- 160/3
   field_width <- 120
   
@@ -28,7 +28,7 @@ plot_field <- function(field_color="#00b140", line_color = "#ffffff") {
       axis.ticks = element_blank(),
       axis.text = element_blank(),
       axis.line = element_blank(),
-      panel.background = element_rect(fill = field_color, color = "white"),
+      panel.background = element_rect(fill = field_color, color = "black"),
       panel.border = element_blank(),
       aspect.ratio = field_height/field_width
     ) +
@@ -173,8 +173,8 @@ plot_frame <- function(one_play, frame, plot_vel = F) {
 }
 
 # ---- establish game and play to plot ----
-playid = 736 #1704 # YT timestamp ... 
-gameid = 	2023090700 #2023092403
+playid = 1704  #736 # YT timestamp ... 
+gameid = 2023092403 #2023090700
 # YT link: ...
 #-------------------------------------------
 
@@ -253,7 +253,7 @@ play_animation <- function(one_play, plot_vel = F) {
       # animation stuff
       transition_time(frame_id) +
       ease_aes('linear') +
-      shadow_trail(distance = 0.01, alpha = 0.6, size = 1.5, exclude_layer = c(8, 9))
+      shadow_trail(distance = 0.009, alpha = 0.8, size = 1.5, exclude_layer = c(8, 9))
     # shadow_wake(wake_length = 1, size = FALSE, alpha = 0.2, exclude_layer = 8, wrap = FALSE)
   }
   
@@ -310,6 +310,6 @@ p_anim <- animate(
 )
 p_anim
 
-anim_save("play.gif", p_anim)
+anim_save("play_with_trails.gif", p_anim)
 # anim_save("play_TRUE.gif", p_anim)
 

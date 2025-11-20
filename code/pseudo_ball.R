@@ -10,11 +10,12 @@ df <- pre_throw |>
   select(game_id, play_id, nfl_id, last_frame_id, x, y, ball_land_x, ball_land_y, num_frames_output) |> 
   mutate(nfl_id = NA_real_)
 
-get_pseudo_trajectory <- function(df, g = 9.81) {
+get_pseudo_trajectory <- function(df) {
   #' @description: function to derive pseudo play-by-play coordinates for the ball
   #' @params: dataframe containing the last pre-throw frame for each QB pass, AND gravitational acceleration value
   #' @output: dataframe of generate coordinates of ball trajectory from last frame of pre-throw to ball_land_x/y
   #' @assumption: I assume that the ball’s pre-throw coordinates are the same as the quarterback’s (passer’s) pre-throw coordinates, since the ball is in their possession immediately before the throw.
+  #' @assumption: Ball moves at constant velocity
   
   df |>
     mutate(flight_duration = num_frames_output * 0.1) |>
@@ -22,10 +23,10 @@ get_pseudo_trajectory <- function(df, g = 9.81) {
       time_sequence <- seq(0, flight_duration - 0.1, by = 0.1)
       
       vx_initial <- (ball_land_x - x) / flight_duration
-      vy_initial <- (ball_land_y - y + 0.5 * g * flight_duration^2) / flight_duration
+      vy_initial <- (ball_land_y - y) / flight_duration
       
       x_vals <- x + vx_initial * time_sequence
-      y_vals <- y + vy_initial * time_sequence - 0.5 * g * time_sequence^2
+      y_vals <- y + vy_initial * time_sequence
       
       data.frame(
         game_id = game_id,
