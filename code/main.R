@@ -5,6 +5,8 @@ library(janitor)
 library(cowplot)
 library(arrow)
 library(sportyR)
+future::plan("multisession")
+
 
 
 main_data <- read_csv('data/main_data.csv')

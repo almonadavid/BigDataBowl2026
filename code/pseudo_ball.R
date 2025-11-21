@@ -20,7 +20,7 @@ get_pseudo_trajectory <- function(df) {
   df |>
     mutate(flight_duration = num_frames_output * 0.1) |>
     pmap_dfr(function(game_id, play_id, nfl_id, last_frame_id, x, y, ball_land_x, ball_land_y, num_frames_output, flight_duration, ...) {
-      time_sequence <- seq(0, flight_duration - 0.1, by = 0.1)
+      time_sequence <- seq(0.1, flight_duration, by = 0.1)
       
       vx_initial <- (ball_land_x - x) / flight_duration
       vy_initial <- (ball_land_y - y) / flight_duration
@@ -61,9 +61,4 @@ pre_throw_psuedo_ball <- pre_throw |> # assuming that the ball’s pre-throw coo
 pre_throw <- bind_rows(pre_throw, pre_throw_psuedo_ball) |> 
   arrange(game_id, play_id, nfl_id, frame_id)
 
-
-
-# next: 
-# use field_control.R
-#
 
