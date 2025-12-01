@@ -1,16 +1,16 @@
 
-library(tidyverse)
-library(gganimate)
-library(janitor)
-library(cowplot)
-library(arrow)
-library(sportyR)
+library(tidyverse, quietly = TRUE)
+library(gganimate, quietly = TRUE)
+library(janitor, quietly = TRUE)
+library(cowplot, quietly = TRUE)
+library(arrow, quietly = TRUE)
+library(sportyR, quietly = TRUE)
 
 
 ## BDB Data
 post_throw <- arrow::read_parquet("data/post_throw_tracking.parquet")
 pre_throw <- arrow::read_parquet("data/pre_throw_tracking.parquet")
-supplement <- read_csv("data/supplementary_data.csv")
+supplement <- suppressMessages(read_csv("data/supplementary_data.csv")) |> filter(season == 2023)
 
 ## Getting team colors
 team_colors <- suppressMessages(readr::read_tsv("https://raw.githubusercontent.com/asonty/ngs_highlights/master/utils/data/nfl_team_colors.tsv"))
@@ -43,7 +43,7 @@ pre_throw <- pre_throw |>
 
 
 post_throw <- post_throw |>
-  left_join(pre_throw |> select(game_id, play_id, nfl_id, season, play_direction, player_name, player_position, 
+  left_join(pre_throw |> select(game_id, play_id, nfl_id, play_direction, player_name, player_position, 
                                 player_side, player_role, player_height, player_weight, player_team, absolute_yardline_number) |> distinct(), 
             by = c("game_id", "play_id", "nfl_id")
   ) |>
@@ -58,7 +58,7 @@ post_throw <- post_throw |>
     dir = (90 - (atan2(dy, dx) * 180 / pi)) %% 360
   ) |> 
   ungroup() |> select(-dx, -dy) |> relocate(s, a, dir, .after = y) |>
-  left_join(supplement, by = c('game_id', 'play_id', 'season')) |>
+  left_join(supplement, by = c('game_id', 'play_id')) |>
   left_join(team_colors, by = c("player_team" = "teams"))
 
 

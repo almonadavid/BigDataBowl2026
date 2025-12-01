@@ -1,7 +1,10 @@
 
+library(gganimate, quietly = TRUE)
 
 # https://www.kaggle.com/code/pablollanderos33/generate-play-animations-with-ggplot/notebook
 
+
+# contrast colors: #00ff00 (neon green), #ff00ff (neon magenta)
  
 fetch_play <- function(df, playid, gameid) {
   play <- df |> 
@@ -173,8 +176,8 @@ plot_frame <- function(one_play, frame, plot_vel = F) {
 }
 
 # ---- establish game and play to plot ----
-playid = 1704  #736 # YT timestamp ... 
-gameid = 2023092403 #2023090700
+playid = 3246 #4180 #1704  #736  
+gameid = 2023091702 #2023112606 #2023092403 #2023090700
 # YT link: ...
 #-------------------------------------------
 
@@ -310,6 +313,6 @@ p_anim <- animate(
 )
 p_anim
 
-anim_save("play_with_trails.gif", p_anim)
+# anim_save("play_with_trails.gif", p_anim)
 # anim_save("play_TRUE.gif", p_anim)
 

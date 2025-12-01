@@ -12,7 +12,6 @@ df <- pre_throw |>
 
 get_pseudo_trajectory <- function(df) {
   #' @description: function to derive pseudo play-by-play coordinates for the ball
-  #' @params: dataframe containing the last pre-throw frame for each QB pass, AND gravitational acceleration value
   #' @output: dataframe of generate coordinates of ball trajectory from last frame of pre-throw to ball_land_x/y
   #' @assumption: I assume that the ball’s pre-throw coordinates are the same as the quarterback’s (passer’s) pre-throw coordinates, since the ball is in their possession immediately before the throw.
   #' @assumption: Ball moves at constant velocity
