@@ -1,0 +1,359 @@
+---
+title: "Catching Chaos"
+output: html_document
+---
+
+
+
+Regardless of skill or experience level, no throw in football is perfect and receivers have to be able to read the flight of a thrown ball and adjust their movements accordingly. Our aim is to quantify the degree of a receiver's adjustment above what is typical with what we call the **Chaos Score**.
+
+The **Chaos Score** is a composite metric summarizing how much a receiver’s route deviates from an ideal, in-stride trajectory on deep passes. It combines multiple features of receiver movement during the play, including:
+
+- Trajectory smoothness
+- Number of directional changes
+- Lateral deviation from pre-throw path
+- Speed change before vs. after throw
+- Turning rate while ball is in the air
+- Deceleration at catch
+- Acceleration while ball is in the air
+
+
+Each feature is standardized within route types, then combined using a Euclidean norm to produce a single numerical value per play.
+
+
+
+### Data
+
+- NFL Big Data Bowl data containing games played during the 2023 NFL season.
+- We filtered the data to only include plays with a pass length of **at least 15 yards**.
+
+```{r libraries, echo=FALSE, warning=FALSE}
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(data.table))
+```
+
+```{r data, warning=FALSE}
+main_data <- suppressMessages(fread('../data/main_data.csv'))
+
+deep_plays <- main_data |> 
+  filter(player_role == 'Targeted Receiver' & pass_length >= 15) |>
+  filter(!(game_id == 2023122100 & play_id == 1450)) # problematic play
+
+# smooth acceleration values with GAM
+suppressPackageStartupMessages(library(mgcv))
+
+deep_plays <- deep_plays |>
+  group_by(game_id, play_id) |>
+  mutate(
+    smoothed_a = predict(gam(a ~ s(frame_id, bs = "cs"), data = pick(everything())))
+  ) |> ungroup() |> relocate(smoothed_a, .after = a)
+
+```
+
+
+
+### Features
+
+1. <u>Trajectory smoothness</u>
+
+This feature compares the receiver's movement path before the ball is thrown to after the ball is thrown. It measures how much the receiver's actual movement path (x–y trajectory) changed before vs. after the throw. To do this, we fit two separate lines of best fit, one for the coordinates before the ball is thrown and the other after the ball is thrown. Then, we calculated the angle between the two lines. A high value indicates the receiver changed direction sharply, while a low value indicates their path remained smooth and consistent.
+
+```{r feature-1}
+angle_between_lines <- function(x, y, pre_throw_frame) {
+  
+  before_throw_model <- lm(y ~ x, subset = pre_throw_frame == 1)
+  after_throw_model <- lm(y ~ x, subset = pre_throw_frame == 0)
+  
+  # Slopes
+  m1 <- coef(before_throw_model)[2]
+  m2 <- coef(after_throw_model)[2]
+  
+  # Angle between lines
+  theta <- atan(abs(m1 - m2) / (1 + m1*m2))
+  theta * 180 / pi
+}
+
+angle_between <- deep_plays |>
+  group_by(game_id, play_id) |>
+  summarise(theta_degrees = abs(angle_between_lines(x, y, pre_throw_frame)),
+            .groups = 'drop')
+```
+
+**Example:**
+```{r gif-1, eval=knitr::is_html_output(), echo=FALSE}
+knitr::include_graphics("angle_example.gif")
+```
+
+```{r plot-1, message=FALSE, echo=FALSE, fig.width=8, fig.height=5}
+ggplot(aes(x, y), data = subset(deep_plays, game_id == 2023090700 & play_id == 1679)) +
+  geom_point(size = 2) +
+  geom_vline(aes(xintercept = x[throw_frame == 1]), color = 'red', linetype = 'dashed', linewidth = 0.8) +
+  geom_smooth(method = "lm", se = FALSE, data = subset(deep_plays, game_id == 2023090700 & play_id == 1679 & pre_throw_frame == 1), color = "blue", xseq = c(44.5, 68)) +
+  geom_smooth(method = "lm", se = FALSE, data = subset(deep_plays, game_id == 2023090700 & play_id == 1679 & pre_throw_frame == 0), color = "green") +
+  coord_fixed() +
+  labs(caption = 'Red line indicates when ball was thrown', subtitle = 'Angle = 15.6 degrees') +
+  theme_bw()
+```
+
+
+2. <u>Number of directional changes</u>
+
+Using last year's BDB finalist submission, [TEndenceIQ](https://www.kaggle.com/code/ericthesteinberg/tendenciq/notebook), we grouped the receiver's directional movement into six categories as seen below. Each category, besides 'backwards' is 36 degrees. We counted how many times the receiver switched between directional categories while the ball was in the air. A high count indicates lots.
+
+```{r fig-2, eval=knitr::is_html_output(), echo=FALSE}
+knitr::include_graphics("dir_categories.png")
+```
+
+```{r feature-2}
+deep_plays <- deep_plays |> 
+  mutate(
+    dir_bin = case_when(
+      dir < 0 | dir > 180 ~ 'backwards',
+      (dir >= 0 & dir < 36) | (dir >= 144 & dir <= 180) ~ 'steep inside/outside',
+      (dir >= 36 & dir < 72) | (dir >= 108 & dir < 144) ~ 'inside/outside',
+      dir >= 72 & dir < 108 ~ 'forward')
+    ) |> 
+  relocate(dir_bin, .after = dir)
+
+num_dir_changes <- deep_plays |>
+  filter(pre_throw_frame == 0) |> 
+  group_by(game_id, play_id) |>
+  select(game_id, play_id, dir_bin) |> 
+  mutate(is_change = dir_bin != lag(dir_bin) & !is.na(lag(dir_bin))) |> 
+  summarise(n_changes = sum(is_change, na.rm = TRUE), .groups='drop')
+```
+
+3. <u>Lateral deviation from pre-throw path</u>
+
+This measures how far left or right a receiver drifted while tracking the thrown ball. We know that not all GO routes are perfectly straight and CROSS routes are naturally slanted, so this is not calculated simply by subtracting the `y` at catch from `y` at throw. Instead, we calculate the lateral drift relative to the receiver's pre throw running path.
+
+```{r feature-3}
+find_lateral_drift <- function(x, y, throw_frame, pre_throw_frame, frame_id) {
+
+  pre_throw_model <- lm(y ~ x, subset = pre_throw_frame == 1)
+  baseline_slope <- coef(pre_throw_model)[2]
+  
+  expected_y <- y[throw_frame == 1] + baseline_slope * (x[last(frame_id)] - x[throw_frame == 1])
+
+  abs(y[last(frame_id)] - expected_y)
+}
+
+lat_diff <- deep_plays |>
+  group_by(game_id, play_id) |> 
+  summarise(
+    lateral_drift = find_lateral_drift(x, y, throw_frame, pre_throw_frame, frame_id),
+    .groups = "drop"
+  )
+```
+
+**Example:**
+In this CROSS route below, the **lateral drift** is 2.48 yds
+```{r gif-3, eval=knitr::is_html_output(), echo=FALSE}
+knitr::include_graphics("lateral_example.gif")
+```
+
+4. <u>Speed change before vs. after throw</u>
+Here, we look at the difference between the mean speed before and after the ball is thrown. A high value tells us that the receiver slowed down or sped up significantly after the throw compared to before it.
+
+```{r feature-4}
+avg_speed_change <- deep_plays |> 
+  group_by(game_id, play_id) |>
+  summarise(
+    avg_speed_pre_throw = mean(s[pre_throw_frame == 1], na.rm = TRUE),
+    avg_speed_post_throw = mean(s[pre_throw_frame == 0], na.rm = TRUE),
+    speed_change = abs(avg_speed_post_throw - avg_speed_pre_throw),
+    .groups = "drop"
+  ) |> select(game_id, play_id, speed_change)
+```
+
+5. <u>Turning rate while ball is in the air</u>
+
+We have defined turning rate as:
+$$\frac{|\Delta dir|}{\Delta t} \text{ (deg/s)}$$
+
+High turning rate: The receiver was making large or frequent directional changes while the ball was in the air.
+Low turning rate: The receiver ran very straight with minimal directional change, indicating a clean, uninterrupted path to the ball.
+
+```{r feature-5}
+turning_rate <- deep_plays |>
+  filter(pre_throw_frame == 0) |> 
+  group_by(game_id, play_id) |>
+  mutate(
+    delta_dir = dir - lag(dir),
+    delta_dir = ((delta_dir + 180) %% 360) - 180 # this correct for fluctations between 360 deg and 0 deg
+    ) |> 
+  summarise(avg_turn_rate = mean(abs(delta_dir) / 0.1, na.rm = TRUE), .groups = "drop")
+```
+
+6. <u>Deceleration at catch</u>
+
+We look at the final five frames before the catch to measure how much the receiver had to brake or slow down to secure the ball. This metric captures whether the receiver could maintain their momentum through the catch point or had to stop and wait for the throw. Lower values indicate the ball arrived perfectly timed to their stride, while higher values suggest poor ball placement requiring the receiver to adjust their speed dramatically.
+
+```{r feature-6}
+catch_deceleration <- deep_plays |>
+  group_by(game_id, play_id) |>
+  slice_tail(n = 5) |>
+  summarise(
+    decel_at_catch = abs(round(first(smoothed_a) - last(smoothed_a), 4)),
+    .groups = "drop"
+  )
+```
+
+
+7. <u>Acceleration while ball is in the air</u>
+
+This measures the magnitude of speed changes the receiver made while tracking the ball in the air. A receiver running a clean route maintains relatively constant speed, resulting in low acceleration values. High values indicate the receiver had to speed up or slow down repeatedly to align with the ball's trajectory.
+
+```{r feature-7}
+avg_acceleration <- deep_plays |>
+  filter(pre_throw_frame == 0) |> 
+  group_by(game_id, play_id) |>
+  summarise(
+    avg_accel = abs(mean(smoothed_a, na.rm = TRUE)),
+    .groups = "drop"
+  )
+```
+
+
+#### Combining features into one dataset
+```{r summary}
+
+play_result <- deep_plays |> 
+  group_by(game_id, play_id) |>
+  summarise(pass_result = unique(pass_result), .groups = "drop")
+
+
+deep_summary <- play_result |> 
+  left_join(angle_between, by = c('game_id', 'play_id')) |>
+  left_join(num_dir_changes, by = c('game_id', 'play_id')) |> 
+  left_join(lat_diff, by = c('game_id', 'play_id')) |> 
+  left_join(avg_speed_change, by = c('game_id', 'play_id')) |> 
+  left_join(turning_rate, by = c('game_id', 'play_id')) |> 
+  left_join(catch_deceleration, by = c('game_id', 'play_id')) |>
+  left_join(avg_acceleration, by = c('game_id', 'play_id'))
+```
+
+
+### Get Chaos Score
+```{r chaos-score}
+chaos_result <- deep_summary |>
+  left_join(deep_plays |>
+              group_by(game_id, play_id) |>
+              slice(1) |>
+              ungroup() |> 
+              select(game_id, play_id, player_name, route_of_targeted_receiver, player_position, possession_team, team_coverage_man_zone, team_coverage_type, pass_length),
+            by = c("game_id", "play_id"))
+
+
+scaled <- chaos_result |>
+  group_by(route_of_targeted_receiver) |>
+  mutate(
+    across(theta_degrees:avg_accel, scale)
+    ) |>
+  ungroup() |> 
+  select(theta_degrees:avg_accel)
+
+chaos_result$chaos_score <- sqrt(rowSums(scaled^2)) # euclidean norm
+chaos_result <- chaos_result |> arrange(desc(chaos_score)) |> filter(!is.na(route_of_targeted_receiver)) # just one play did not have a tagged route
+
+```
+
+#### Histogram of Chaos Score 
+```{r chaos-hist, eval=knitr::is_html_output(), echo=FALSE}
+knitr::include_graphics("chaos_score_histogram.png")
+```
+
+
+
+
+Interpretation: Higher values indicate more “route breakage” — i.e., the receiver made more adjustments, slowed, or changed direction while the ball was in the air. Lower values indicate smoother, cleaner routes where the receiver ran in stride to the catch.
+
+Range: The index is unbounded above (extreme routes yield high values) and bounded below by 0 (perfectly smooth routes).
+
+
+### Looking at the results...
+
+#### Chaos score by route
+
+```{r}
+chaos_result |> 
+  group_by(route_of_targeted_receiver) |> 
+  summarise(
+    n = n(),
+    mean_score = mean(chaos_score),
+    comp_rate = round(sum(pass_result == 'C') / n, 3)
+  )
+```
+
+
+#### ...by QB
+
+```{r}
+play_passer <- arrow::read_parquet("../data/pre_throw_tracking.parquet") |> 
+  filter(player_role == "Passer") |> 
+  distinct(game_id, play_id, .keep_all = TRUE) |> 
+  transmute(
+    game_id,
+    play_id,
+    passer = player_name
+  )
+
+# data from https://www.pro-football-reference.com/years/2023/passing.htm
+qb_data <- fread("../data/2023_NFL_Passing.csv") |> 
+  select(Player, Rate, QBR)
+```
+
+```{r, message=FALSE}
+chaos_result |>
+  left_join(play_passer, by = c('game_id', 'play_id')) |>
+  group_by(passer) |> 
+  summarise(
+    n = n(),
+    mean_score = mean(chaos_score),
+    comp_rate = round(sum(pass_result == 'C') / n, 3)
+  ) |> filter(n >= 20) |> 
+  arrange(desc(mean_score)) |>
+  left_join(qb_data, by = join_by(passer == Player)) |> 
+  drop_na() |> 
+  ggplot() +
+  geom_point(aes(x = mean_score, y = Rate)) + # similar relationship with QBR
+  geom_smooth(aes(x = mean_score, y = Rate), method = 'lm', se=FALSE) +
+  labs(caption = "a positive relationship is counterintuitive.") +
+  theme_bw()
+```
+
+
+#### ...by targeted receiver
+
+- Top 10
+```{r}
+chaos_result |> 
+  group_by(player_name) |> 
+  summarise(
+    n = n(),
+    mean_score = mean(chaos_score),
+    comp_rate = round(sum(pass_result == 'C') / n, 3)
+  ) |> filter(n >= 15) |> slice_max(n = 10, order_by = mean_score)
+```
+
+- Bottom 10
+```{r}
+chaos_result |> 
+  group_by(player_name) |> 
+  summarise(
+    n = n(),
+    mean_score = mean(chaos_score),
+    comp_rate = round(sum(pass_result == 'C') / n, 3)
+  ) |> filter(n >= 15) |> slice_min(n = 10, order_by = mean_score)
+```
+
+
+
+### Thoughts on problems / limitations
+
+1. Does not account for changes in player orientation.
+2. Incompletions might not generate enough chaos. If a ball sails way over everyone's head (terrible throw), there's actually low chaos because the receiver just... runs their route and it's incomplete. The chaos only happens when receivers are actively trying to adjust to catchable-but-difficult throws.
+3. Currently does not account for defensive coverage.
+5. No weights; each feature is reated equally.
+
+

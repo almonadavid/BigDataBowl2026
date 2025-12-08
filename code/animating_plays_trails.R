@@ -176,8 +176,8 @@ plot_frame <- function(one_play, frame, plot_vel = F) {
 }
 
 # ---- establish game and play to plot ----
-playid = 3246 #4180 #1704  #736  
-gameid = 2023091702 #2023112606 #2023092403 #2023090700
+playid = 2239
+gameid = 2023112609
 # YT link: ...
 #-------------------------------------------
 
@@ -313,6 +313,5 @@ p_anim <- animate(
 )
 p_anim
 
-# anim_save("play_with_trails.gif", p_anim)
-# anim_save("play_TRUE.gif", p_anim)
+#anim_save("lateral_example.gif", p_anim)
 
