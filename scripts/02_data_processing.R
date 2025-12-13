@@ -1,16 +1,29 @@
 
-library(tidyverse, quietly = TRUE)
-library(gganimate, quietly = TRUE)
-library(janitor, quietly = TRUE)
-library(cowplot, quietly = TRUE)
-library(arrow, quietly = TRUE)
-library(sportyR, quietly = TRUE)
+library(tidyverse)
+library(gganimate)
+library(janitor)
+library(cowplot)
+library(arrow)
+library(sportyR)
 
 
 ## BDB Data
+
+## Note (from kaggle discussion posts):
+# The data does not contain all 22 players.
+# The tracking data only includes the following players:
+#   - The Targeted receiver
+#   - Defensive Players: 
+#     - Within 5 yards of player at pass release OR 
+#     - Able to reach land location of the ball, given a speed of 12 yds/second and the observed airtime of the pass
+# These filters will sometimes include defensive players who do not cover the targeted receiver or go to the ball. When predicting a real play, it is important to include these players as they could cover the targeted receiver, even though they do not in the given case.
+
+
 post_throw <- arrow::read_parquet("data/post_throw_tracking.parquet")
 pre_throw <- arrow::read_parquet("data/pre_throw_tracking.parquet")
 supplement <- suppressMessages(read_csv("data/supplementary_data.csv")) |> filter(season == 2023)
+
+
 
 ## Getting team colors
 team_colors <- suppressMessages(readr::read_tsv("https://raw.githubusercontent.com/asonty/ngs_highlights/master/utils/data/nfl_team_colors.tsv"))
@@ -75,7 +88,7 @@ post_throw <- post_throw |>
 
 
 ## Extrapolate the ball's play-by-play coordinates
-source('code/pseudo_ball.R')
+source('scripts/03_pseudo_ball.R')
 
 
 ## Join pre_throw and post_throw
@@ -100,7 +113,7 @@ full_df <- pre_throw |>
     pre_throw_frame = ifelse(is.na(pre_throw_frame), 0, pre_throw_frame)
   ) |> relocate(dir_rad, dir_x, dir_y, s_x, s_y, a_x, a_y, .after = dir)
 
-## Save full_df
+## save
 write_csv(full_df, 'data/main_data.csv')
 
 

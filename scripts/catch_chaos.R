@@ -23,63 +23,42 @@ deep_plays <- deep_plays |>
   ) |> ungroup() |> relocate(smoothed_a, .after = a)
 
 
+# extending post_throw analysis to 2 frames (0.2s) before throw frame
+deep_plays <- deep_plays |>
+  group_by(game_id, play_id) |>
+  mutate(
+    throw_fid = frame_id[throw_frame == 1][1],
+    pre_throw_shifted = if_else(frame_id <= throw_fid - 2, 1, 0)
+  ) |>
+  ungroup()
+
+
 # Isolating the play descriptions
 descriptions <- deep_plays |> 
-  #filter(route_of_targeted_receiver == 'CROSS') |> 
   group_by(game_id, play_id) |> 
   slice(1) |> 
   ungroup() |> 
   select(game_id, play_id, play_description)
 
-
-ggplot(aes(x, y), data = subset(deep_plays, game_id == 2023090700 & play_id == 1679)) +
-  geom_point(size = 2) +
-  geom_vline(aes(xintercept = x[throw_frame == 1]), color = 'red', linetype = 'dashed', linewidth = 0.8) +
-  geom_smooth(method = "lm", se = FALSE, data = subset(deep_plays, game_id == 2023090700 & play_id == 1679 & pre_throw_frame == 1), color = "blue", xseq = c(44.5, 68)) +
-  geom_smooth(method = "lm", se = FALSE, data = subset(deep_plays, game_id == 2023090700 & play_id == 1679 & pre_throw_frame == 0), color = "green") +
-  coord_fixed() +
-  theme_bw() +
-  theme(plot.margin = margin(0, 0, 0, 0))
-
 #-------------------------------------------------------------------------------------------------------
-### Angle between the line of best fit before vs. after the throw frame
-angle_between_lines <- function(x, y, pre_throw_frame) {
-  
-  before_throw_model <- lm(y ~ x, subset = pre_throw_frame == 1)
-  after_throw_model <- lm(y ~ x, subset = pre_throw_frame == 0)
-  
-  # Slopes
-  m1 <- coef(before_throw_model)[2]
-  m2 <- coef(after_throw_model)[2]
-  
-  # Angle between lines
-  theta <- atan(abs(m1 - m2) / (1 + m1*m2))
-  theta * 180 / pi
+### Angle directional rotation
+circular_mean <- function(theta) {
+  atan2(mean(sin(theta * pi/180)), mean(cos(theta * pi/180))) * 180/pi
 }
-
-angle_between <- deep_plays |>
-  group_by(game_id, play_id) |>
-  summarise(theta_degrees = abs(angle_between_lines(x, y, pre_throw_frame)),
-            .groups = 'drop')
-
-# theta_degrees: How much the receiver’s actual movement path (x–y trajectory) changed before vs. after the throw.
-# High: they changed running direction sharply.
-# Low: their path stayed smooth and consistent.
-
-
 
 dir_rotation <- deep_plays |> 
   group_by(game_id, play_id) |> 
   summarise(
-    avg_dir_pre = mean(dir[pre_throw_frame == 1]),
-    avg_dir_post = mean(dir[pre_throw_frame == 0]),
+    avg_dir_pre = circular_mean(dir[pre_throw_shifted == 1 & s > 1.0]),
+    avg_dir_post = circular_mean(dir[pre_throw_shifted == 0 & s > 1.0]),
     dir_rot = avg_dir_post - avg_dir_pre,
     dir_rot = abs(((dir_rot + 180) %% 360) - 180),
     .groups = 'drop'
-  )
+  ) |> select(game_id, play_id, dir_rot)
 
-# if someone moves from 90 to 181, dir change is 91. but is someone moves from 90 to 359, dir change is 269 when it should actually be 91
-# perhaps create a function() and within, temporarily adjust degree such than moving right is 180 deg and left is 0 deg, 90 up and 270 down
+# dir_rot: How much the receiver’s actual movement path (x–y trajectory) changed before vs. after the throw.
+# High: they changed running direction sharply.
+# Low: their path stayed smooth and consistent.
 
 #-------------------------------------------------------------------------------------------------------
 
@@ -87,24 +66,24 @@ dir_rotation <- deep_plays |>
 #-------------------------------------------------------------------------------------------------------
 ### Counting changes in dir_bin when ball-in-air
 
-# Direction bins based on Lucca's TEndencIQ
-deep_plays <- deep_plays |> 
-  mutate(
-    dir_bin = case_when(
-      dir < 0 | dir > 180 ~ 'backwards',
-      (dir >= 0 & dir < 36) | (dir >= 144 & dir <= 180) ~ 'steep inside/outside',
-      (dir >= 36 & dir < 72) | (dir >= 108 & dir < 144) ~ 'inside/outside',
-      dir >= 72 & dir < 108 ~ 'forward'
-    )
-  ) |> 
-  relocate(dir_bin, .after = dir)
-
-num_dir_changes <- deep_plays |>
-  filter(pre_throw_frame == 0) |> 
-  group_by(game_id, play_id) |>
-  select(game_id, play_id, dir_bin) |> 
-  mutate(is_change = dir_bin != lag(dir_bin) & !is.na(lag(dir_bin))) |> 
-  summarise(n_changes = sum(is_change, na.rm = TRUE), .groups='drop')
+# # Direction bins based on Lucca's TEndencIQ
+# deep_plays <- deep_plays |> 
+#   mutate(
+#     dir_bin = case_when(
+#       dir < 0 | dir > 180 ~ 'backwards',
+#       (dir >= 0 & dir < 36) | (dir >= 144 & dir <= 180) ~ 'steep inside/outside',
+#       (dir >= 36 & dir < 72) | (dir >= 108 & dir < 144) ~ 'inside/outside',
+#       dir >= 72 & dir < 108 ~ 'forward'
+#     )
+#   ) |> 
+#   relocate(dir_bin, .after = dir)
+# 
+# num_dir_changes <- deep_plays |>
+#   filter(pre_throw_shifted == 0 & s > 1.0) |> # speed threshold to remove noise from small wiggles 
+#   group_by(game_id, play_id) |>
+#   select(game_id, play_id, dir_bin) |> 
+#   mutate(is_change = dir_bin != lag(dir_bin) & !is.na(lag(dir_bin))) |> 
+#   summarise(n_changes = sum(is_change, na.rm = TRUE), .groups='drop')
 
 # High n_changes: The receiver kept switching directional categories.
 # This means lots of adjustment while the ball was in the air.
@@ -114,9 +93,9 @@ num_dir_changes <- deep_plays |>
 
 #-------------------------------------------------------------------------------------------------------
 ### Lateral drift
-find_lateral_drift <- function(x, y, throw_frame, pre_throw_frame, frame_id) {
+find_lateral_drift <- function(x, y, throw_frame, pre_throw_shifted, frame_id) {
 
-  pre_throw_model <- lm(y ~ x, subset = pre_throw_frame == 1)
+  pre_throw_model <- lm(y ~ x, subset = pre_throw_shifted == 1)
   baseline_slope <- coef(pre_throw_model)[2]
   
   expected_y <- y[throw_frame == 1] + baseline_slope * (x[last(frame_id)] - x[throw_frame == 1])
@@ -127,7 +106,7 @@ find_lateral_drift <- function(x, y, throw_frame, pre_throw_frame, frame_id) {
 lat_diff <- deep_plays |>
   group_by(game_id, play_id) |> 
   summarise(
-    lateral_drift = find_lateral_drift(x, y, throw_frame, pre_throw_frame, frame_id),
+    lateral_drift = find_lateral_drift(x, y, throw_frame, pre_throw_shifted, frame_id),
     .groups = "drop"
   )
 
@@ -142,8 +121,8 @@ lat_diff <- deep_plays |>
 avg_speed_change <- deep_plays |> 
   group_by(game_id, play_id) |>
   summarise(
-    avg_speed_pre_throw = mean(s[pre_throw_frame == 1], na.rm = TRUE),
-    avg_speed_post_throw = mean(s[pre_throw_frame == 0], na.rm = TRUE),
+    avg_speed_pre_throw = mean(s[pre_throw_shifted == 1], na.rm = TRUE),
+    avg_speed_post_throw = mean(s[pre_throw_shifted == 0], na.rm = TRUE),
     speed_change = abs(avg_speed_post_throw - avg_speed_pre_throw),
     .groups = "drop"
   ) |> select(game_id, play_id, speed_change)
@@ -156,13 +135,14 @@ avg_speed_change <- deep_plays |>
 #-------------------------------------------------------------------------------------------------------
 ### Mean Turning Rate while ball-in-air in deg/sec
 turning_rate <- deep_plays |>
-  filter(pre_throw_frame == 0) |> 
+  filter(pre_throw_shifted == 0) |> 
   group_by(game_id, play_id) |>
   mutate(
     delta_dir = dir - lag(dir),
-    delta_dir = ((delta_dir + 180) %% 360) - 180 # this correct for fluctations between 360 deg and 0 deg
+    delta_dir = ((delta_dir + 180) %% 360) - 180,
+    weighted_turn = abs(delta_dir) * s / max(s, na.rm = TRUE)
     ) |> 
-  summarise(avg_turn_rate = mean(abs(delta_dir) / 0.1, na.rm = TRUE), .groups = "drop")
+  summarise(avg_turn_rate = mean(weighted_turn / 0.1, na.rm = TRUE), .groups = "drop")
   
 # High turning rate: The receiver was making large or frequent directional changes 
 # while the ball was in the air — lots of adjustment, possibly reacting to ball trajectory or defender.
@@ -191,7 +171,7 @@ catch_deceleration <- deep_plays |>
 #-------------------------------------------------------------------------------------------------------
 ### Acceleration while ball-in-air
 avg_acceleration <- deep_plays |>
-  filter(pre_throw_frame == 0) |> 
+  filter(pre_throw_shifted == 0) |> 
   group_by(game_id, play_id) |>
   summarise(
     avg_accel = abs(mean(smoothed_a, na.rm = TRUE)),
@@ -215,16 +195,24 @@ play_result <- deep_plays |>
 
 #-------------------------------------------------------------------------------------------------------
 
-
 deep_summary <- play_result |> 
-  left_join(angle_between, by = c('game_id', 'play_id')) |>
-  left_join(num_dir_changes, by = c('game_id', 'play_id')) |> 
+  left_join(dir_rotation, by = c('game_id', 'play_id')) |>
   left_join(lat_diff, by = c('game_id', 'play_id')) |> 
   left_join(avg_speed_change, by = c('game_id', 'play_id')) |> 
   left_join(turning_rate, by = c('game_id', 'play_id')) |> 
   left_join(catch_deceleration, by = c('game_id', 'play_id')) |>
   left_join(avg_acceleration, by = c('game_id', 'play_id'))
   
+### Correlation matrix
+library(corrplot)
+deep_summary |>
+  select(dir_rot:avg_accel) |>
+  cor(use = "pairwise.complete.obs") |>
+  corrplot(method = "color", type = "upper", 
+           addCoef.col = "black", number.cex = 0.7,
+           tl.col = "black", tl.srt = 45)
+
+# cor(select(chaos_result, dir_rot:avg_accel), use = "pairwise.complete.obs")
 
 ### Get Chaos Score
 chaos_result <- deep_summary |>
@@ -239,10 +227,10 @@ chaos_result <- deep_summary |>
 scaled <- chaos_result |>
   group_by(route_of_targeted_receiver) |>
   mutate(
-    across(theta_degrees:avg_accel, scale)
+    across(dir_rot:avg_accel, scale)
     ) |>
-  ungroup() |> 
-  select(theta_degrees:avg_accel)
+  ungroup() |>
+  select(dir_rot:avg_accel)
 
 chaos_result$chaos_score <- sqrt(rowSums(scaled^2))
 chaos_result <- chaos_result |> arrange(desc(chaos_score)) |> filter(!is.na(route_of_targeted_receiver)) # just one play didn't have a tagged route
@@ -254,21 +242,77 @@ ggplot(data = chaos_result, aes(x = chaos_score)) +
   theme_bw()
   
 
+# by score bins ------------------------------------------------------------------
 
-# histogram of all features
-chaos_result |> #filter(route_of_targeted_receiver == 'C') |>
-  select(theta_degrees:avg_accel) |>
-  pivot_longer(cols = everything(), names_to = "variable", values_to = "value") |>
-  ggplot(aes(x = value)) +
-  geom_histogram(fill = "lightblue", color = "black") +
-  facet_wrap(~ variable, scales = "free") +
-  labs(
-    title = "Histograms of Deep Go Features",
-    x = "Value",
-    y = "Frequency"
-  ) +
-  theme_classic()
+# log_scores <- log(chaos_result$chaos_score + 1)
+# quantile(log_scores, probs = c(0, 1/3, 2/3, 1), na.rm = TRUE)
+# exp(0.9900239) - 1
 
+chaos_result <- chaos_result |> 
+  mutate(
+    score_bin = case_when(
+      chaos_score <= 2.0 ~ 'Low', # 1.69
+      chaos_score > 2.0 & chaos_score <= 3.35 ~ 'Medium', # 2.35
+      TRUE ~ 'High'
+    )
+  )
+
+
+chaos_result |> 
+  drop_na() |> 
+  mutate(score_bin = factor(score_bin, levels = c("Low", "Medium", "High"))) |> 
+  group_by(score_bin) |> 
+  summarise(
+    n = n(),
+    mean_score = mean(chaos_score),
+    comp_rate = round(sum(pass_result == "C") / n, 3),
+    .groups = "drop"
+  )
+
+# --------------------------------------------------------------------------------
+
+
+# by pass length ---------------------------------
+
+chaos_result <- chaos_result |> 
+  mutate(
+    pass_bin = case_when(
+      pass_length <= 25 ~ '15-25',
+      pass_length <= 40 ~ '26-40',
+      TRUE ~ '40+'
+    )
+  )
+
+chaos_result |> 
+  drop_na() |> 
+  mutate(pass_bin = factor(pass_bin, levels = c("40+", "26-40", "15-25"))) |> 
+  ggplot(aes(x = chaos_score, y = pass_bin, fill = pass_bin)) +
+  geom_density_ridges(alpha = 0.7, scale = 0.9, 
+                      quantile_lines = TRUE, quantiles = 2) +  # adds median line
+  labs(title = "Distribution of Chaos Score by Pass Length",
+       x = "Chaos Score", 
+       y = "Pass Length (yards)") +
+  theme_bw() +
+  theme(legend.position = "none")
+
+
+
+
+
+# # histogram of all features
+# chaos_result |> #filter(route_of_targeted_receiver == 'C') |>
+#   select(dir_rot:avg_accel) |>
+#   pivot_longer(cols = everything(), names_to = "variable", values_to = "value") |>
+#   ggplot(aes(x = value)) +
+#   geom_histogram(fill = "lightblue", color = "black") +
+#   facet_wrap(~ variable, scales = "free") +
+#   labs(
+#     title = "Histograms of Deep Go Features",
+#     x = "Value",
+#     y = "Frequency"
+#   ) +
+#   theme_classic()
+# 
 
 
 

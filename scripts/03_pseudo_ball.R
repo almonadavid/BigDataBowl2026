@@ -42,7 +42,7 @@ get_pseudo_trajectory <- function(df) {
 pseudo_ball_traj <- get_pseudo_trajectory(df) # this is post_throw ball trajectory
 # head(pseudo_ball_trajectory)
 
-# Adding pseudo ball trajectory to post_throw
+# adding pseudo ball trajectory to post_throw
 post_throw <- bind_rows(post_throw, pseudo_ball_traj) |> 
   arrange(game_id, play_id, nfl_id, frame_id)
 
@@ -56,7 +56,7 @@ pre_throw_psuedo_ball <- pre_throw |> # assuming that the ball’s pre-throw coo
     player_to_predict = TRUE
   )
 
-# Adding a duplicate of QB coordinates as the ball coordinates to pre_throw
+# adding a duplicate of QB coordinates as the ball coordinates to pre_throw
 pre_throw <- bind_rows(pre_throw, pre_throw_psuedo_ball) |> 
   arrange(game_id, play_id, nfl_id, frame_id)
 

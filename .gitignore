@@ -8,5 +8,5 @@
 *.parquet
 
 data/
-model_notebook.ipynb
-feature_engineering.R
+*.mp4 
+*.mp4 

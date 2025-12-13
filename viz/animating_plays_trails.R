@@ -1,7 +1,13 @@
 
+library(gganimate)
+library(tidyverse)
+library(data.table)
 
-# https://www.kaggle.com/code/pablollanderos33/generate-play-animations-with-ggplot/notebook
+# uncomment and load, if not already loaded
+# main_data <- suppressMessages(fread('data/main_data.csv')) 
 
+
+# credit: https://www.kaggle.com/code/pablollanderos33/generate-play-animations-with-ggplot/notebook
 
 fetch_play <- function(df, playid, gameid) {
   play <- df |> 
@@ -11,7 +17,7 @@ fetch_play <- function(df, playid, gameid) {
 
 
 ## Plotting the field
-plot_field <- function(field_color="#00b140", line_color = "#ffffff") {
+plot_field <- function(field_color="#ffffff", line_color = "#000000") {
   field_height <- 160/3
   field_width <- 120
   
@@ -28,7 +34,7 @@ plot_field <- function(field_color="#00b140", line_color = "#ffffff") {
       axis.ticks = element_blank(),
       axis.text = element_blank(),
       axis.line = element_blank(),
-      panel.background = element_rect(fill = field_color, color = "white"),
+      panel.background = element_rect(fill = field_color, color = "black"),
       panel.border = element_blank(),
       aspect.ratio = field_height/field_width
     ) +
@@ -173,9 +179,10 @@ plot_frame <- function(one_play, frame, plot_vel = F) {
 }
 
 # ---- establish game and play to plot ----
-playid = 1154 # YT timestamp ... 736
-gameid = 	2023090700
+playid = 1830
+gameid = 2023111209
 # YT link: ...
+# https://www.bigdatabrawl.com/
 #-------------------------------------------
 
 # exctract play df ----
@@ -227,25 +234,50 @@ play_animation <- function(one_play, plot_vel = F) {
         x = togo_line, xend = togo_line, y = 0, yend = 160/3,
         colour = "#f9c80e"
       ) +
+      # Trail points w/ no border
       geom_point(
-        data = one_play, 
-        mapping = aes(x = x, y = y, color = color1), 
-        size = 4 
-        ) +
+        data = one_play,
+        mapping = aes(x = x, y = y, fill = color1, color = color1),  # color too for trail
+        size = 4, shape = 21, stroke = 0
+      ) +
+      geom_point(
+        data = one_play,
+        mapping = aes(x = x, y = y, fill = color1),
+        size = 4, shape = 21, color = 'black', stroke = 0.6
+      ) +
       geom_segment(
         data = one_play,
         mapping = aes(x = x, y = y, xend = x + v_x, yend = y + v_y, color = color1),
         linewidth = 1, arrow = arrow(length = unit(0.01, "npc"))
       ) + 
-      scale_colour_manual(values = colores) +
+      scale_colour_manual(
+        values = colores,
+        breaks = c("#203731", "#D3BC8D", NA),
+        labels = c( "Green Bay Packers", "New Orleans Saints", "Ball")
+      ) +
+      scale_fill_manual(
+        values = colores,
+        breaks = c("#203731", "#D3BC8D", NA),
+        labels = c( "Green Bay Packers", "New Orleans Saints", "Ball")
+      ) +
       labs(
         title = play_desc,
-        caption = "Data: Big Data Bowl 2026"
+        caption = "Data: Big Data Bowl 2026",
+        color = NULL, fill = NULL
       ) +
-      theme(legend.position="none") +
+      # theme(legend.position="none") +
+      theme(
+        legend.position = "bottom",
+        legend.direction = "horizontal",
+        legend.title = element_text(size = 11, face = "bold"),
+        legend.text = element_text(size = 10),
+        legend.key.size = unit(0.6, "cm")
+      ) + 
       # animation stuff
       transition_time(frame_id) +
-      ease_aes('linear')
+      ease_aes('linear') +
+      shadow_trail(distance = 0.009, alpha = 0.8, size = 1.5, exclude_layer = c(8, 9))
+    # shadow_wake(wake_length = 1, size = FALSE, alpha = 0.2, exclude_layer = 8, wrap = FALSE)
   }
   
   else {
@@ -275,7 +307,8 @@ play_animation <- function(one_play, plot_vel = F) {
       theme(legend.position="none") +
       # animation stuff
       transition_time(frame_id) +
-      ease_aes('linear')
+      ease_aes('linear') +
+      shadow_mark(linetype = 'solid', size = 0.75)
   }
   return(anim)
 }
@@ -300,6 +333,5 @@ p_anim <- animate(
 )
 p_anim
 
-anim_save("play_no_trails.gif", p_anim)
-# anim_save("play_TRUE.gif", p_anim)
+#anim_save("viz/motivating_play.gif", p_anim)
 

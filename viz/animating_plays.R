@@ -1,11 +1,8 @@
 
-library(gganimate, quietly = TRUE)
 
 # https://www.kaggle.com/code/pablollanderos33/generate-play-animations-with-ggplot/notebook
 
 
-# contrast colors: #00ff00 (neon green), #ff00ff (neon magenta)
- 
 fetch_play <- function(df, playid, gameid) {
   play <- df |> 
     filter(game_id == gameid & play_id == playid)
@@ -14,7 +11,7 @@ fetch_play <- function(df, playid, gameid) {
 
 
 ## Plotting the field
-plot_field <- function(field_color="#ffffff", line_color = "#000000") {
+plot_field <- function(field_color="#00b140", line_color = "#ffffff") {
   field_height <- 160/3
   field_width <- 120
   
@@ -31,7 +28,7 @@ plot_field <- function(field_color="#ffffff", line_color = "#000000") {
       axis.ticks = element_blank(),
       axis.text = element_blank(),
       axis.line = element_blank(),
-      panel.background = element_rect(fill = field_color, color = "black"),
+      panel.background = element_rect(fill = field_color, color = "white"),
       panel.border = element_blank(),
       aspect.ratio = field_height/field_width
     ) +
@@ -176,8 +173,8 @@ plot_frame <- function(one_play, frame, plot_vel = F) {
 }
 
 # ---- establish game and play to plot ----
-playid = 2239
-gameid = 2023112609
+playid = 1154 # YT timestamp ... 736
+gameid = 	2023090700
 # YT link: ...
 #-------------------------------------------
 
@@ -230,23 +227,16 @@ play_animation <- function(one_play, plot_vel = F) {
         x = togo_line, xend = togo_line, y = 0, yend = 160/3,
         colour = "#f9c80e"
       ) +
-      # Trail points w/ no border
       geom_point(
-        data = one_play,
-        mapping = aes(x = x, y = y, fill = color1, color = color1),  # color too for trail
-        size = 4, shape = 21, stroke = 0
-      ) +
-      geom_point(
-        data = one_play,
-        mapping = aes(x = x, y = y, fill = color1),
-        size = 4, shape = 21, color = 'black', stroke = 0.6
-      ) +
+        data = one_play, 
+        mapping = aes(x = x, y = y, color = color1), 
+        size = 4 
+        ) +
       geom_segment(
         data = one_play,
         mapping = aes(x = x, y = y, xend = x + v_x, yend = y + v_y, color = color1),
         linewidth = 1, arrow = arrow(length = unit(0.01, "npc"))
       ) + 
-      scale_fill_manual(values = colores) +
       scale_colour_manual(values = colores) +
       labs(
         title = play_desc,
@@ -255,9 +245,7 @@ play_animation <- function(one_play, plot_vel = F) {
       theme(legend.position="none") +
       # animation stuff
       transition_time(frame_id) +
-      ease_aes('linear') +
-      shadow_trail(distance = 0.009, alpha = 0.8, size = 1.5, exclude_layer = c(8, 9))
-    # shadow_wake(wake_length = 1, size = FALSE, alpha = 0.2, exclude_layer = 8, wrap = FALSE)
+      ease_aes('linear')
   }
   
   else {
@@ -287,8 +275,7 @@ play_animation <- function(one_play, plot_vel = F) {
       theme(legend.position="none") +
       # animation stuff
       transition_time(frame_id) +
-      ease_aes('linear') +
-      shadow_mark(linetype = 'solid', size = 0.75)
+      ease_aes('linear')
   }
   return(anim)
 }
@@ -313,5 +300,6 @@ p_anim <- animate(
 )
 p_anim
 
-#anim_save("lateral_example.gif", p_anim)
+anim_save("play_no_trails.gif", p_anim)
+# anim_save("viz/play_TRUE.gif", p_anim)
 
