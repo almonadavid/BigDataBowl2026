@@ -64,7 +64,7 @@ placement_errors <- plays |>
     pre_dir_rad = circular_mean(dir_rad[pre_throw_shifted == 1]),
     air_frames = sum(pre_throw_frame == 0),
     
-    expected_catch_x = throw_x + throw_vx * (air_frames * 0.1), # xcatch = x0 + vx0 ⋅ tair
+    expected_catch_x = throw_x + throw_vx * (air_frames * 0.1), # xcatch = x0 + vx0 * tair
     expected_catch_x = pmax(0, pmin(120, expected_catch_x)),
     
     expected_catch_y = throw_y + throw_vy * (air_frames * 0.1),
@@ -101,13 +101,7 @@ adjustment_work <- plays |>
 ball_placement_quality <- placement_errors |>
   left_join(adjustment_work, by = c("game_id", "play_id")) |>
   mutate(
-    placement_score = -(
-      scale(lateral_error)[,1] +        
-      scale(depth_error)[,1] +          
-      scale(turn_rate)[,1] + 
-      scale(total_accel_effort)[,1]
-    )
-  ) |>
+    placement_score = -(scale(lateral_error)[,1] + scale(depth_error)[,1] + scale(turn_rate)[,1] + scale(total_accel_effort)[,1])) |>
   arrange(desc(placement_score))
 
 # # add to mutate() if  to covert to 0-100% scale
@@ -131,6 +125,8 @@ ball_placement_quality <- ball_placement_quality |>
               slice(1) |>
               ungroup() |> 
               select(game_id, play_id, player_name, route_of_targeted_receiver, player_position, possession_team, team_coverage_man_zone, team_coverage_type, pass_length),
-            by = c("game_id", "play_id"))
+            by = c("game_id", "play_id")) |> 
+  drop_na()
 
 
+fwrite(ball_placement_quality, "data/ball_placement_quality.csv")

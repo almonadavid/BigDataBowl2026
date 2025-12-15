@@ -1,14 +1,34 @@
-source("scripts/04_placement_quality.R")
 
 library(tidyverse)
+library(data.table)
 library(gt)
 library(ggridges)
 library(nflreadr)
 library(magick)
 
+source("scripts/04_placement_quality.R")
+# ball_placement_quality <- suppressMessages(fread('data/ball_placement_quality.csv'))
 
 
-# placement score by pass result -------------------------------------------------
+## distribution of placement score ------------------------------------------------
+ball_placement_quality |>
+  ggplot(aes(x = placement_score)) +
+  geom_density() +
+  geom_vline(aes(xintercept = mean(placement_score, na.rm = TRUE), color = "Mean"), linetype = "solid") +
+  geom_vline(aes(xintercept = median(placement_score, na.rm = TRUE), color = "Median"), linetype = "dashed") +
+  scale_color_manual(
+    name = "",
+    values = c("Mean" = "blue", "Median" = "red")
+  ) +
+  labs(
+    x = "Placement Score",
+    y = "Density"
+  ) +
+  theme_bw(base_size = 15)
+
+
+
+## placement score by pass result -------------------------------------------------
 ball_placement_quality |> 
   left_join(play_result, by = c('game_id', 'play_id')) |>
   group_by(pass_result) |> 
@@ -40,7 +60,7 @@ ball_placement_quality |>
 
 
 
-# placement score by QB ----------------------------------------------------------
+## placement score by QB ----------------------------------------------------------
 play_passer <- arrow::read_parquet("data/pre_throw_tracking.parquet") |> 
   filter(player_role == "Passer") |> 
   distinct(game_id, play_id, .keep_all = TRUE) |> 
@@ -51,7 +71,6 @@ play_passer <- arrow::read_parquet("data/pre_throw_tracking.parquet") |>
   )
 
 # controlling for pass length, receiver route and team coverage type
-
 control_lm <- lm(placement_score ~ pass_length + route_of_targeted_receiver + team_coverage_type, data = ball_placement_quality)
 
 ball_placement_quality <- ball_placement_quality |>
@@ -127,7 +146,7 @@ qb_ranks <- ball_placement_quality |>
 gtsave(qb_ranks, "viz/qb_ranks.png")
 
 
-# placement score by receiver ----------------------------------------------------
+## placement score by receiver ----------------------------------------------------
 bottom_receiver_ranks <- ball_placement_quality |>
   group_by(player_name) |>
   summarise(
@@ -257,7 +276,7 @@ gtsave(top_receiver_ranks, "viz/top_receiver_ranks.png")
 combined <- image_append(c(image_read("viz/top_receiver_ranks.png"), image_read("viz/bottom_receiver_ranks.png")))
 image_write(combined, "viz/receiver_ranks.png")
 
-# placement score by route --------------------------------------------------------
+## placement score by route --------------------------------------------------------
 ball_placement_quality |>
   group_by(route_of_targeted_receiver) |> 
   drop_na() |> 
@@ -267,7 +286,7 @@ ball_placement_quality |>
   ) |> arrange(desc(score)) |> gt()
 
 
-# placement score by coverage type --------------------------------------------------------
+## placement score by coverage type --------------------------------------------------------
 ball_placement_quality |>
   group_by(team_coverage_type) |> 
   drop_na() |> 
@@ -277,7 +296,7 @@ ball_placement_quality |>
   ) |> arrange(desc(score)) |> gt()
 
 
-# placement score by pass length --------------------------------------------------
+## placement score by pass length --------------------------------------------------
 ball_placement_quality |> 
   mutate(
     pass_bin = case_when(
@@ -303,7 +322,8 @@ ball_placement_quality |>
   theme(legend.position = "none")
 
 
-# placement score vs. completion probability from nflreadr
+## placement score vs. completion probability from nflreadr
+# dictionary: https://nflreadr.nflverse.com/articles/dictionary_pbp.html
 pbp_pass <- load_pbp(c(2023)) |>
   progressr::with_progress() |> 
   filter(play_type == "pass" & lateral_reception == 0) |>
@@ -311,7 +331,7 @@ pbp_pass <- load_pbp(c(2023)) |>
   mutate(game_id = as.double(game_id))
 
 
-left_join(ball_placement_quality, pbp_pass, by = c('game_id', 'play_id')) |> 
+left_join(ball_placement_quality, pbp_pass, by = c('game_id', 'play_id')) |>
   drop_na() |> 
   ggplot(aes(x = placement_score, y = cp)) +
   geom_point(alpha = 0.2) +
@@ -320,5 +340,5 @@ left_join(ball_placement_quality, pbp_pass, by = c('game_id', 'play_id')) |>
     x = "Placement Score",
     y = "Completion Probability"
   ) +
-  theme_bw(base_size = 15) +
+  theme_bw(base_size = 17) +
   ggpubr::stat_cor(method = "pearson")

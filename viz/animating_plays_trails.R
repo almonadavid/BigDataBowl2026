@@ -1,10 +1,10 @@
 
 library(gganimate)
 library(tidyverse)
-library(data.table)
 
 # uncomment and load, if not already loaded
-# main_data <- suppressMessages(fread('data/main_data.csv')) 
+# library(data.table)
+# main_data <- suppressMessages(fread('data/main_data.csv'))
 
 
 # credit: https://www.kaggle.com/code/pablollanderos33/generate-play-animations-with-ggplot/notebook
@@ -179,8 +179,8 @@ plot_frame <- function(one_play, frame, plot_vel = F) {
 }
 
 # ---- establish game and play to plot ----
-playid = 1830
-gameid = 2023111209
+playid = 4180
+gameid = 2023112606
 # YT link: ...
 # https://www.bigdatabrawl.com/
 #-------------------------------------------

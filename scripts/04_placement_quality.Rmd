@@ -1,82 +1,83 @@
 ---
 title: "Chasing Imperfect Passes"
-author: "by David Almona, Sammy Davis - Broadcast Visualization Track - Big Data Bowl Mentorship Program"
+subtitle: "Into the Life of a Receiver"
 output: 
   html_document:
     self_contained: true
 ---
+Broadcast Visualization Track | Authors: David Almona (Centre College) and Sammy Davis (Texas A&M University)
 
-## **Introduction**
-The center snaps the ball to the quarterback, who then goes through his read progression before throwing a downfield pass to his intended target receiver. The quarterback must do this in a matter of seconds to avoid getting sacked, and once the ball leaves their hands, the pass result becomes a contest of precision, timing, and movement. The quarterback must read and anticipate their receiver's movement to decide the best placement for the throw, giving their receiver a chance. The 2026 NFL Big Data Bowl has asked participants to help with better understanding these moments by analyzing **player movement while the ball is in the air.**
+
+# **Introduction**
+
+The center snaps the ball to the quarterback, who then goes through his read progression before throwing a downfield pass to his intended target receiver. The quarterback must do this in a matter of seconds to avoid getting sacked, and once the ball leaves his hands, the pass result becomes a contest of precision, timing, and movement. The quarterback must read and anticipate his receiver’s movement to decide the best placement for the throw, giving his receiver a chance. The 2026 NFL Big Data Bowl has asked participants to help with better understanding these moments by analyzing **player movement while the ball is in the air.**
 
 In this submission, we look at **how a quarterback’s ball placement influences receiver movement.** Rather than evaluating the catch result alone, we focus on what happens between ball release and ball arrival: the adjustments, turns, and acceleration a receiver must make to reach the football. These movements help to understand the quality of the throw and the difficulty imposed on the receiver. **In simpler terms, how does a QB’s throw make the life of a receiver easier or harder?**
 
-To do this, we introduce a **Placement Score**, a metric that measures how much a quarterback's throw deviates from the receiver’s pre-throw trajectory and how much effort the receiver makes in adjusting to the thrown ball. 
+# **Motivation**
 
+Take a look at this play from Week 10: New York Giants vs. Dallas Cowboys. Dak Prescott, under pressure, passes right to CeeDee Lamb for 17 yards.
 
-## **Motivation**
-
-2023 - New Orleans Saints vs Green Bay Packers (Week 3)
-
-- briefly desciribe what's going on in video.
-- almost intercept
-- ...
-- ...
-
-```{r, eval=knitr::is_html_output(), echo=FALSE}
-knitr::include_graphics("../viz/motivating_play2.gif")
-```
-
-## **Analysis**
-We relied on the provided data of passing plays from the 2023 NFL season. This year's competition was unique in having pre-throw and post-throw data separately, so we combined the two into a one seamless dataset and derived a ‘pseudo ball’ because the frame-by-frame coordinates of the football were not included in the dataset. We also removed five plays we found with issues while creating play animations, leaving us with **14,103 plays.**
-
-The first step in our analysis was to estimate the receiver’s expected arrival location at the moment of the catch. Using the receiver’s pre-throw trajectory, the ball’s landing location, and the time the ball spent in the air, we project where the receiver would have naturally arrived. Then, we compare the receiver’s actual arrival point with their projected arrival point and measure the placement error. The placement error is made up of two components: the **lateral error**, which measures how far the ball was placed left or right of the receiver’s natural path, and the **depth error**, which measures how far the ball ended up too short or too long along the receiver’s natural path. For example, in the play from the motivating example above, we project that R.Shaheed would arrive at the red star in the left static image below (the left image is a snapshot at the throw frame). His actual arrival point is seen in right static image, and we can see how the lateral and depth errors are calculated.
-
-```{r, eval=knitr::is_html_output(), echo=FALSE}
-knitr::include_graphics("../viz/motivating_play.gif")
-```
-
-```{r, eval=knitr::is_html_output(), echo=FALSE}
-knitr::include_graphics("../viz/combined_images_horizontal.png")
+```{r, echo=FALSE}
+knitr::include_url("https://www.youtube.com/embed/MWakEG23HSM")
 ```
 
 
-Next, we quantify the receiver’s adjustment with two features: **total acceleration effort** and **turning rate.** Total acceleration effort is the sum of absolute acceleration values while the ball is in the air. We use the absolute value because we don't care if they sped up or slowed down; acceleration and deceleration both require effort, and we assume that they require the same effort. Turning rate is a measure of the receiver’s average change in direction over the time that the ball was in the air. It is calculated using the formula:
+
+Watch Lamb's movement closely. As the ball is released, he's running downfield, but adjusts his path and comes back toward the throw to make the catch. With help from the [commentary](https://youtu.be/ShIkktu3ueE?t=355), we understand that Prescott just lobbed the ball, making Lamb work for it.
+
+Lamb had to slow down, change direction, and close the gap between where he was naturally heading and where the ball arrived. The completion happened, but with considerable effort. This adjustment tells us something about the quality of the throw. 
+
+To quantify this, we introduce a **Placement Score**, a metric that measures how much a quarterback's throw deviates from the receiver's pre-throw trajectory and how much effort the receiver expends adjusting to the ball.
+
+# **Analysis**
+
+We relied on the provided data of passing plays from the 2023 NFL season. This year’s competition was unique in having pre-throw and post-throw data separately, so we combined the two into a one seamless dataset and derived a ‘pseudo ball’ because the frame-by-frame coordinates of the football were not included in the dataset. We also removed five plays we found with issues while creating play animations, leaving us with **14,098 plays.**
+
+The first step in our analysis was to estimate the receiver’s expected arrival location at the moment of the catch. Using the receiver’s pre-throw trajectory, the ball’s landing location, and the time the ball spent in the air, we project where the receiver would have naturally arrived. Then, we compare the receiver’s actual arrival point with their projected arrival point and measure the placement error. The placement error is made up of two components: the **lateral error**, which measures how far the ball was placed perpendicular to the receiver’s natural path, and the **depth error**, which measures how far the ball ended up too short or too long along the receiver’s natural path. Below, we see a play from Week 3: New Orleans Saints vs. Green Bay Packers. We project that R.Shaheed would arrive at the red star in the left static image below (the left image is a snapshot at the throw frame). His actual arrival point is seen in the right static image, and we can see how the lateral and depth errors are calculated.
+
+![](https://www.googleapis.com/download/storage/v1/b/kaggle-user-content/o/inbox%2F14743420%2Fed11c41caac4f7e31883e19096f6a1e6%2Fmotivating_play.gif?generation=1765658380018645&alt=media)
+![](https://www.googleapis.com/download/storage/v1/b/kaggle-user-content/o/inbox%2F14743420%2F6f4b53c30daf3f4fabb931f799034689%2Fcombined_images_horizontal.png?generation=1765658412413033&alt=media)
+
+Next, we quantify the receiver’s adjustment with two features: **total acceleration effort** and **turning rate.** Total acceleration effort is the sum of absolute acceleration values while the ball is in the air. We use the absolute value because we don’t care if they sped up or slowed down; acceleration and deceleration both require effort, and we assume that they require the same effort. Turning rate is a measure of the receiver’s average change in direction over the time that the ball was in the air. It is calculated using the formula:
 $$
 \text{mean}\left(\frac{|\Delta \text{dir}|}{\Delta t}\right)\;(\text{deg/s})
 $$
 
+# **Calculating Placement Score**
 
-## **Calculating Placement Score**
 The **Placement Score**, therefore, combines these four features: lateral error, depth error, total acceleration effort, and turning rate. We standardized each feature and summed them up to get our placement score. We inverted the score so that a higher score means better placement.
 
 $$
 \text{Placement Score}
-= -\Big(
-z(\text{Lateral Error})
-+ z(\text{Depth Error})
-+ z(\text{Turning Rate})
-+ z(\text{Total Acceleration Effort})
-\Big)
+= -\Big(z(\text{Lateral Error}) + z(\text{Depth Error}) + z(\text{Turning Rate}) + z(\text{Total Acceleration Effort})\Big)
 $$
 
- 
+
 **Higher scores indicate better ball placement:** the quarterback placed the ball where the receiver’s momentum was naturally carrying them, requiring minimal adjustment.
 
 **Lower scores indicate worse ball placement:** the quarterback forced the receiver to make significant adjustments to catch the ball.
 
+# **Results** 
 
-## **Results** 
+#### <u>Distribution of Placement Score</u>
+
+The distribution below shows placement scores across all 14,103 plays in our dataset, with a long left tail.
+
+<img src="https://www.googleapis.com/download/storage/v1/b/kaggle-user-content/o/inbox%2F14743420%2Fa03d126bf0c2ff846a4692fec3ac760f%2Fplacement_kde.png?generation=1765691080181417&alt=media" width="700" style="display: block; margin: 0 auto;">
+
+
+**Revisiting our example plays from above:**
+
+- Dak Prescott to CeeDee Lamb (Week 10): Placement Score = -9.95
+- Derek Carr to Rashid Shaheed (Week 3): Placement Score = -5.41
 <br>
 
-#### <u>Why is good placement important?</U>
+#### <u>Why is Good Placement Important?</U>
 
 Looking at the relationship between Placement Score and Completion Probability, we see a positive correlation with a coefficient of 0.54, indicating that a higher Placement Score corresponds to higher Completion Probability.
 
-```{r, eval=knitr::is_html_output(), echo=FALSE}
-knitr::include_graphics("../viz/placement_vs_cp.png")
-```
-
+<img src="https://www.googleapis.com/download/storage/v1/b/kaggle-user-content/o/inbox%2F14743420%2F99b85465fd69c5221dbad611ea79a4dc%2Fplacement_vs_cp.png?generation=1765691567059994&alt=media" width="700" style="display: block; margin: 0 auto;">
 <br>
 
 #### <u>Ranking QBs on Placement Score</u>
@@ -87,38 +88,40 @@ Not all throws are equal. A 5-yard hitch route in Cover 2 is easier to place tha
 - Route of the targeted receiver: Certain routes are easier to place than others
 - Coverage type: man vs zone can affect throwing windows
 
-Using a regression model, we calculate an expected placement score for each throw based on these factors. We then subtract the QB’s expected placement score from their actual placement score to get the Placement Over Expected (POE).
+Using a linear regression model, we calculate an expected placement score for each throw based on these factors. We then subtract the QB’s expected placement score from their actual placement score to get the Placement Over Expected (POE).
 
-```{r, eval=knitr::is_html_output(), echo=FALSE}
-knitr::include_graphics("../viz/qb_ranks.png")
-```
 
+<img src="https://www.googleapis.com/download/storage/v1/b/kaggle-user-content/o/inbox%2F14743420%2Fe29192c8018b0041782d2f02f9d03ab6%2Fqb_ranks.png?generation=1765658951658321&alt=media" width="450" style="display: block; margin: 0 auto;">
 <br>
 
 #### <u>Which receivers are forced to work the hardest?</u>
-```{r, eval=knitr::is_html_output(), echo=FALSE}
-knitr::include_graphics("../viz/receiver_ranks.png")
-```
 
+We can also look at Placement Score from the receiver's perspective.
+![](https://www.googleapis.com/download/storage/v1/b/kaggle-user-content/o/inbox%2F14743420%2F1583590abed5dd6d0b9ee4a4611cd506%2Freceiver_ranks.png?generation=1765659020714289&alt=media)
+<br>
 
-## **Discussion**
+# **Discussion**
 
-- conclusion
-- use-case
-- can be used to divide credit between qb and receiver??
-- ...
-- ...
+#### <u>Use case</U>
+The Placement Score helps to understand how a QB's throw makes the life of a receiver easier or harder. This can be useful in film study between the QB Coach and the QB. If a QB has a high completion rate but poor placement scores, it shows it's more the WR making a good play than the QB throwing a good pass. From there, they can also identify the plays where the QB has the lowest score and understand what went wrong; was the ball placed too far inside, thrown short, or did it force unnecessary deceleration? This feedback could also help young quarterbacks still developing timing and anticipation with their receivers.
 
-#### <u>Limitation</U>
+We can also use Placement Score to evaluate receivers by showing how well a WR is at tracking and judging the ball while it is in the air. Consistent low placement scores indicate players who excel at making difficult adjustments. This could potentially be used by analysts to divide credit between the QB and a receiver.
 
-- Projection of receiver’s path does not account for non-linear motion.
-- Unable to account for [<u>QB-Receiver chemistry</u>](https://www.tiktok.com/t/ZP8UcCy3B/)
-- Does not account for defender proximity.
+Lastly, a Placement Score graphic during broadcast can enhance fan experience by providing context after key plays. Fans can understand who deserves credit on completions and who is at fault on incompletions. This could be likened to a [difficulty score in gymnastics](https://www.nbcolympics.com/news/gymnastics-101-olympic-scoring-rules-and-regulations#:~:text=The%20Difficulty%20Score%20starts%20at,men's%20gymnastics%2C%2010%20are%20counted.).
 
+#### <u>Limitations</U>
+- Our method for projecting where a receiver would naturally arrive based on their pre-throw trajectory is linear and does not account for normal non-linear motion. 
+- The metric also cannot account for QB-WR chemistry. Sometimes quarterbacks and receivers develop timing and trust where intentional adjustments are part of the design, like back-shoulder fades or sight adjustments where the receiver is expected to come back to the ball. Our metric would penalize these throws even though they require adjustment by design, as highlighted in this [TikTok video](https://www.tiktok.com/t/ZP8UcCy3B/).
+- Finally, if the throw is so bad that the receiver gives up or can't reach it, and therefore doesn't adjust, our metric might incorrectly show good placement. This could happen on severe overthrows/underthrows, balls thrown out of bounds, and incompletions where the receiver didn't react.
 
-## **Appendix**
+***
+# **Appendix**
 
-```{r, eval=knitr::is_html_output(), echo=FALSE}
-knitr::include_graphics("../viz/placement_vs_pass_length.png")
-```
-
+- All code is available [here](https://github.com/almonadavid/BigDataBowl2026).
+- **References:** 
+  - Credit to [Pablo Landeros](https://www.kaggle.com/code/pablollanderos33/generate-play-animations-with-ggplot/notebook) for the play animation code we built on and used for this project.
+  - Video source: NFL Pro
+- **Acknowledgements:** We would like to thank Michael Lopez, Tom Bliss, Ally Blake, and every NFL staff who has made this competition possible. Also, thanks to our mentors in the NFL Big Data Bowl Mentorship Program, who gave us great advice and the opportunity to collaborate.
+- Contact us:
+  - David Almona:
+  - Sammy Davis:

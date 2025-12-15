@@ -6,6 +6,7 @@
 *.html
 *.mhtml
 *.parquet
+*.nb
 
 data/
 *.mp4 
