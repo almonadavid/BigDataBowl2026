@@ -33,9 +33,10 @@ ball_placement_quality |>
   left_join(play_result, by = c('game_id', 'play_id')) |>
   group_by(pass_result) |> 
   summarise(
-    n = n(),
-    score = median(placement_score, na.rm = TRUE)
-  )
+    Total = n(),
+    `Average Placement Score` = round(mean(placement_score, na.rm = TRUE), 2)
+  ) |> rename("Pass Result" = "pass_result") |> 
+  gt()
 
 ball_placement_quality |> 
   left_join(play_result, by = c('game_id', 'play_id')) |>
@@ -47,7 +48,7 @@ ball_placement_quality |>
     TRUE ~ pass_result
   ), levels = c("Interception", "Incomplete", "Complete"))) |> 
   ggplot(aes(x = placement_score, y = pass_result, fill = pass_result)) +
-  geom_density_ridges(alpha = 0.7, scale = 1.5, quantile_lines = TRUE, quantiles = 2) +
+  geom_density_ridges(alpha = 0.5, scale = 1.5, quantile_lines = TRUE, quantiles = 2) +
   scale_y_discrete(expand = expansion(mult = c(0.1, 0))) +
   labs(
     title = "Distribution of Placement Score by Pass Result",
@@ -281,19 +282,23 @@ ball_placement_quality |>
   group_by(route_of_targeted_receiver) |> 
   drop_na() |> 
   summarise(
-    n = n(),
-    score = round(mean(placement_score, na.rm = TRUE), 2)
-  ) |> arrange(desc(score)) |> gt()
+    Total = n(),
+    `Average Score` = round(mean(placement_score, na.rm = TRUE), 2)
+  ) |> arrange(desc(`Average Score`)) |> 
+  rename("Receiver's Route" = "route_of_targeted_receiver") |> 
+  gt()
 
 
 ## placement score by coverage type --------------------------------------------------------
 ball_placement_quality |>
-  group_by(team_coverage_type) |> 
+  group_by(team_coverage_man_zone) |> 
   drop_na() |> 
   summarise(
-    n = n(),
-    score = round(mean(placement_score, na.rm = TRUE), 2)
-  ) |> arrange(desc(score)) |> gt()
+    Total = n(),
+    `Average Score` = round(mean(placement_score, na.rm = TRUE), 2)
+  ) |> arrange(desc(`Average Score`)) |> 
+  rename("Coverage Type" = "team_coverage_man_zone") |> 
+  gt()
 
 
 ## placement score by pass length --------------------------------------------------

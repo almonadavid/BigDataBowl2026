@@ -114,9 +114,15 @@ ball_placement_quality <- placement_errors |>
 
 ball_placement_quality |> 
   select(turn_rate, lateral_error:total_accel_effort) |> 
+  rename(
+    "Turning Rate" = "turn_rate",
+    "Lateral Error" = "lateral_error",
+    "Depth Error" = "depth_error",
+    "Total Acceleration Effort" = "total_accel_effort"
+  ) |> 
   cor(use = "pairwise.complete.obs") |>
   corrplot(method = "color", type = "upper", 
-           addCoef.col = "black", number.cex = 0.7,
+           addCoef.col = "black", number.cex = 1,
            tl.col = "black", tl.srt = 45)
 
 ball_placement_quality <- ball_placement_quality |>

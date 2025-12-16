@@ -50,7 +50,7 @@ ggplot(data = play_one) +
 
 ## the idea is that a perfect QB throw should land to the receiver in stride, not breakage.
 
-# get different variables, then k-means cluster like John NY Giants metric
+# get different variables, then k-means cluster like John's (https://www.kaggle.com/code/johnwilson31/tackling-the-issue-of-a-linebacker-s-influence)
 
 
 

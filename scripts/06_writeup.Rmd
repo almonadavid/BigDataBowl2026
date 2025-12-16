@@ -6,6 +6,8 @@ output:
     self_contained: true
 ---
 Broadcast Visualization Track | Authors: David Almona (Centre College) and Sammy Davis (Texas A&M University)
+<br>
+Broadcast Deliverable: https://youtu.be/5MAJs3GtqHw
 
 
 # **Introduction**
@@ -122,6 +124,6 @@ Lastly, a Placement Score graphic during broadcast can enhance fan experience by
   - Credit to [Pablo Landeros](https://www.kaggle.com/code/pablollanderos33/generate-play-animations-with-ggplot/notebook) for the play animation code we built on and used for this project.
   - Video source: NFL Pro
 - **Acknowledgements:** We would like to thank Michael Lopez, Tom Bliss, Ally Blake, and every NFL staff who has made this competition possible. Also, thanks to our mentors in the NFL Big Data Bowl Mentorship Program, who gave us great advice and the opportunity to collaborate.
-- Contact us:
+- **Contact us:**
   - David Almona:
   - Sammy Davis:
