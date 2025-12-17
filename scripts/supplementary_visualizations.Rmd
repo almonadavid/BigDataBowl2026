@@ -16,50 +16,37 @@ library(gt)
 library(ggridges)
 library(nflreadr)
 library(magick)
+options(scipen = 0)
 
 
-main_data <- suppressMessages(fread('../data/main_data.csv')) 
 ball_placement_quality <- suppressMessages(fread('../data/ball_placement_quality.csv'))
-
-plays <- main_data |>
-  mutate(dir_rad = (90 - dir) * pi/180) |> 
-  filter(player_role == 'Targeted Receiver') |>
-  filter(!(game_id == 2023122100 & play_id == 1450) &
-           !(game_id == 2023091100 & play_id == 3167) &
-           !(game_id == 2023122402 & play_id == 1054) &
-           !(game_id == 2023091013 & play_id == 3974) &
-           !(game_id == 2023091000 & play_id == 3369)) # problematic plays
-
-
-## extending post_throw analysis to 2 frames (0.2s) before throw frame accounting for QB already made decision
-plays <- plays |>
-  group_by(game_id, play_id) |>
-  mutate(
-    throw_fid = frame_id[throw_frame == 1][1],
-    pre_throw_shifted = if_else(frame_id <= throw_fid - 2, 1, 0)
-  ) |>
-  ungroup()
-
-
-## isolating the play descriptions
-descriptions <- plays |> 
-  group_by(game_id, play_id) |> 
-  slice(1) |> ungroup() |> 
-  select(game_id, play_id, play_description)
-
-
-## play result
-play_result <- plays |> 
-  group_by(game_id, play_id) |>
-  summarise(pass_result = unique(pass_result), .groups = "drop")
 ```
 
 <br>
 
-### 1. Placement Score by Pass Result
+### 1. Distribution of Placement Score
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+ball_placement_quality |>
+  ggplot(aes(x = placement_score)) +
+  geom_density() +
+  geom_vline(aes(xintercept = mean(placement_score, na.rm = TRUE), color = "Mean"), linetype = "solid") +
+  geom_vline(aes(xintercept = median(placement_score, na.rm = TRUE), color = "Median"), linetype = "dashed") +
+  scale_color_manual(
+    name = "",
+    values = c("Mean" = "blue", "Median" = "red")
+  ) +
+  labs(
+    x = "Placement Score",
+    y = "Density"
+  ) +
+  theme_bw()
+```
+
+
+
+### 2. Placement Score by Pass Result
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
 ball_placement_quality |> 
-  left_join(play_result, by = c('game_id', 'play_id')) |>
   group_by(pass_result) |> 
   summarise(
     Total = n(),
@@ -72,7 +59,6 @@ ball_placement_quality |>
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
 ball_placement_quality |> 
-  left_join(play_result, by = c('game_id', 'play_id')) |>
   drop_na() |> 
   mutate(pass_result = factor(case_when(
     pass_result == "I" ~ "Incomplete",
@@ -81,7 +67,7 @@ ball_placement_quality |>
     TRUE ~ pass_result
   ), levels = c("Interception", "Incomplete", "Complete"))) |> 
   ggplot(aes(x = placement_score, y = pass_result, fill = pass_result)) +
-  geom_density_ridges(alpha = 0.5, scale = 1.5, quantile_lines = TRUE, quantiles = 2) +
+  geom_density_ridges(alpha = 0.6, scale = 1.5, quantile_lines = TRUE, quantiles = 2) +
   scale_y_discrete(expand = expansion(mult = c(0.1, 0))) +
   labs(
     #title = "Distribution of Placement Score by Pass Result",
@@ -97,7 +83,7 @@ ball_placement_quality |>
 
 ```{r}
 # ANOVA test
-anova <- aov(placement_score ~ pass_result, data = left_join(ball_placement_quality, play_result, by = c('game_id', 'play_id')))
+anova <- aov(placement_score ~ pass_result, data = ball_placement_quality)
              
 summary(anova)
 ```
@@ -108,25 +94,25 @@ TukeyHSD(anova)
 
 Completions have significantly better placement than incompletions and interceptions. Incompletions and interceptions are not significantly different from each other.
 
-### 2. Placement Score by Pass Length
+### 3. Placement Score by Pass Length
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
 ball_placement_quality |> 
   mutate(
     pass_bin = case_when(
       pass_length < 0 ~ 'Behind LOS',
       pass_length < 15 ~ '0-14',
-      pass_length <= 25 ~ '15-25',
-      pass_length <= 40 ~ '26-40',
+      pass_length < 25 ~ '15-24',
+      pass_length <= 39 ~ '25-39',
       TRUE ~ '40+'
     )
   ) |> 
   drop_na() |> 
-  mutate(pass_bin = factor(pass_bin, levels = c("40+", "26-40", "15-25", '0-14', 'Behind LOS'))) |> 
+  mutate(pass_bin = factor(pass_bin, levels = c("40+", "25-39", "15-24", '0-14', 'Behind LOS'))) |> 
   ggplot(aes(x = placement_score, y = pass_bin, fill = pass_bin)) +
-  geom_density_ridges(alpha = 0.5, scale = 1.5, quantile_lines = TRUE, quantiles = 2) +
+  geom_density_ridges(alpha = 0.6, scale = 1.5, quantile_lines = TRUE, quantiles = 2) +
   scale_y_discrete(expand = expansion(mult = c(0.1, 0))) +
   labs(
-    #title = "Distribution of Placement Score by Pass Length",
+    title = "Distribution of Placement Score by Pass Length",
     x = "Placement Score", 
     y = "Pass Length (yards)",
     caption = "Quantile line = median"
@@ -145,40 +131,40 @@ anova <- aov(placement_score ~ pass_bin,
                  pass_bin = case_when(
                    pass_length < 0 ~ 'Behind LOS',
                    pass_length < 15 ~ '0-14',
-                   pass_length <= 25 ~ '15-25',
-                   pass_length <= 40 ~ '26-40',
+                   pass_length < 25 ~ '15-24',
+                   pass_length <= 39 ~ '25-39',
                    TRUE ~ '40+'
                    )
-                 ) |> drop_na() |>
-               mutate(pass_bin = factor(pass_bin, levels = c("40+", "26-40", "15-25", '0-14', 'Behind LOS'))))
+                 )
+               )
              
 summary(anova)
 ```
 
 There is statistical evidence that ball placement score differs depending on pass length.
 
-### 3. Placement Score by Route of Targeted Receiver
+### 4. Placement Score by Route of Targeted Receiver
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
 ball_placement_quality |>
   group_by(route_of_targeted_receiver) |> 
   drop_na() |> 
   summarise(
     Total = n(),
-    `Average Score` = round(mean(placement_score, na.rm = TRUE), 2)
-  ) |> arrange(desc(`Average Score`)) |> 
+    `Placement Score` = round(mean(placement_score, na.rm = TRUE), 2)
+  ) |> arrange(desc(`Placement Score`)) |> 
   rename("Receiver's Route" = "route_of_targeted_receiver") |> 
   gt()
 ```
 
-### 4. Placement Score by Coverage Type
+### 5. Placement Score by Coverage Type
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
 ball_placement_quality |>
   group_by(team_coverage_man_zone) |> 
   drop_na() |> 
   summarise(
     Total = n(),
-    `Average Score` = round(mean(placement_score, na.rm = TRUE), 2)
-  ) |> arrange(desc(`Average Score`)) |> 
+    `Placement Score` = round(mean(placement_score, na.rm = TRUE), 2)
+  ) |> arrange(desc(`Placement Score`)) |> 
   rename("Coverage Type" = "team_coverage_man_zone") |> 
   gt()
 ```
@@ -191,3 +177,34 @@ anova <- aov(placement_score ~ team_coverage_man_zone, data = ball_placement_qua
 summary(anova)
 ```
 There is statistical evidence that ball placement score differs depending on whether the defense is in man or zone coverage.
+
+### 6. Placement Score by Player Position
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+ball_placement_quality |>
+  filter(player_position %in% c("TE", "RB", "WR")) |> 
+  mutate(player_position = factor(player_position, levels = c("WR", "TE", "RB"))) |> 
+  ggplot(aes(x = placement_score, y = player_position, fill = player_position)) +
+  geom_density_ridges(alpha = 0.6, scale = 1.5, quantile_lines = TRUE, quantiles = 2) +
+  scale_y_discrete(expand = expansion(mult = c(0.1, 0))) +
+  labs(
+    x = "Placement Score", 
+    y = "Player Position",
+    caption = "Quantile line = median"
+  ) +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+<br>
+
+```{r}
+# ANOVA test
+anova <- aov(placement_score ~ player_position, data = ball_placement_quality |> filter(player_position %in% c("TE", "RB", "WR")))
+             
+summary(anova)
+```
+
+```{r}
+TukeyHSD(anova)
+```
+

@@ -5,8 +5,12 @@ library(gt)
 library(ggridges)
 library(nflreadr)
 library(magick)
+library(car)
+
+options(scipen = 999)
 
 source("scripts/04_placement_quality.R")
+# OR just load saved dataset
 # ball_placement_quality <- suppressMessages(fread('data/ball_placement_quality.csv'))
 
 
@@ -30,7 +34,6 @@ ball_placement_quality |>
 
 ## placement score by pass result -------------------------------------------------
 ball_placement_quality |> 
-  left_join(play_result, by = c('game_id', 'play_id')) |>
   group_by(pass_result) |> 
   summarise(
     Total = n(),
@@ -39,7 +42,6 @@ ball_placement_quality |>
   gt()
 
 ball_placement_quality |> 
-  left_join(play_result, by = c('game_id', 'play_id')) |>
   drop_na() |> 
   mutate(pass_result = factor(case_when(
     pass_result == "I" ~ "Incomplete",
@@ -73,6 +75,8 @@ play_passer <- arrow::read_parquet("data/pre_throw_tracking.parquet") |>
 
 # controlling for pass length, receiver route and team coverage type
 control_lm <- lm(placement_score ~ pass_length + route_of_targeted_receiver + team_coverage_type, data = ball_placement_quality)
+# summary(control_lm)
+# vif(control_lm)
 
 ball_placement_quality <- ball_placement_quality |>
   mutate(
@@ -81,17 +85,30 @@ ball_placement_quality <- ball_placement_quality |>
   )
 
 qb_ranks <- ball_placement_quality |>
-  left_join(play_passer, by = c('game_id', 'play_id')) |>
+  mutate(
+    pass_bin = factor(case_when(
+      pass_length < 10 ~ 'Short',
+      pass_length < 20 ~ 'Medium',
+      TRUE ~ 'Deep')
+    )
+  ) |>
   group_by(passer) |>
   summarise(
     possession_team = first(possession_team),
     n = n(),
-    mean_placement = mean(placement_score, na.rm = TRUE),
-    adj_placement = mean(placement_over_expected, na.rm = TRUE)
+    mean_placement = round(mean(placement_score, na.rm = TRUE), 2),
+    adj_placement = round(mean(placement_over_expected, na.rm = TRUE), 2),
+    n_short = sum(pass_bin == "Short"),
+    adj_placement_short = round(mean(placement_over_expected[pass_bin == "Short"], na.rm = TRUE), 2),
+    n_medium = sum(pass_bin == "Medium"),
+    adj_placement_medium = round(mean(placement_over_expected[pass_bin == "Medium"], na.rm = TRUE), 2),
+    n_deep = sum(pass_bin == "Deep"),
+    adj_placement_deep = round(mean(placement_over_expected[pass_bin == "Deep"], na.rm = TRUE), 2)
   ) |>
-  filter(n >= 200) |> # min. 200 pass attempts
+  filter(n >= 150) |>
   arrange(desc(adj_placement)) |> 
-  mutate(rank = row_number()) |> relocate(rank) |> 
+  mutate(rank = row_number()) |> 
+  relocate(rank) |> 
   gt() |> 
   tab_options(
     table.border.top.color = "white",
@@ -103,40 +120,40 @@ qb_ranks <- ball_placement_quality |>
       default_fonts()
     )
   ) |>
-  fmt_number(
-    columns = c(mean_placement),
-    decimals = 2,
-  ) |>
-  fmt_number(
-    columns = c(adj_placement),
-    decimals = 2,
-  ) |>
   data_color(
-    columns = c(adj_placement),
+    columns = starts_with("adj_placement"),
     colors = scales::col_numeric(
       palette = c("#DEEBF7", "#08306B"),
       domain = NULL
     )
-  ) |> 
+  ) |>  
+  tab_spanner(label = md("**Overall**"), columns = c(n, mean_placement, adj_placement)) |>
+  tab_spanner(label = md("**Short (< 10 yds)**"), columns = c(n_short, adj_placement_short)) |>
+  tab_spanner(label = md("**Medium (10-19 yds)**"), columns = c(n_medium, adj_placement_medium)) |>
+  tab_spanner(label = md("**Deep (20+ yds)**"), columns = c(n_deep, adj_placement_deep)) |>
   cols_label(
     rank = md("**Rank**"),
     passer = md("**Player**"),
     possession_team = md("**Team**"),
     n = md("**Total Pass Attempts**"),
     mean_placement = md("**Placement Score**"),
-    adj_placement = md("**POE**")
+    adj_placement = md("**POE**"),
+    n_short = md("**Total Attempts**"),
+    adj_placement_short = md("**POE**"),
+    n_medium = md("**Total Attempts**"),
+    adj_placement_medium = md("**POE**"),
+    n_deep = md("**Total Attempts**"),
+    adj_placement_deep = md("**POE**")
   ) |> 
-  cols_align(
-    align = "center",
-    columns = everything()
+  cols_align(align = "center", columns = everything()) |> 
+  tab_header(
+    md("**QB Rankings**"),
+    md("(Minimum 150 pass attempts)")
   ) |> 
-  tab_header(md("**QB Rankings**"),
-             md("(Minimum 200 pass attempts)")) |> 
-  tab_style(style = cell_borders(sides = "top"),
-            locations = cells_title("title")) |> 
-  tab_options(
-    table.border.top.style = "a"
-  ) |> 
+  tab_style(
+    style = cell_borders(sides = "top"),
+    locations = cells_title("title")) |> 
+  tab_options(table.border.top.style = "a") |> 
   tab_footnote(
     footnote = "Average placement score over expected across all pass attempts",
     locations = cells_column_labels(
@@ -144,20 +161,42 @@ qb_ranks <- ball_placement_quality |>
     )
   )
 
-gtsave(qb_ranks, "viz/qb_ranks.png")
+gtsave(qb_ranks, "viz/qb_ranks.png", vwidth = 1400)
+
+
+## placement score by player position ---------------------------------------------
+ball_placement_quality |>
+  filter(player_position %in% c("TE", "RB", "WR")) |> 
+  mutate(player_position = factor(player_position, levels = c("WR", "TE", "RB"))) |> 
+  ggplot(aes(x = placement_score, y = player_position, fill = player_position)) +
+  geom_density_ridges(alpha = 0.7, scale = 1.5, quantile_lines = TRUE, quantiles = 2) +
+  scale_y_discrete(expand = expansion(mult = c(0.1, 0))) +
+  labs(
+    title = "Distribution of Placement Score by Player Position",
+    x = "Placement Score", 
+    y = "Player Position",
+    caption = "Quantile line = median"
+  ) +
+  theme_bw(base_size = 16) +
+  theme(legend.position = "none")
+
 
 
 ## placement score by receiver ----------------------------------------------------
-bottom_receiver_ranks <- ball_placement_quality |>
+lower_quartile <- -1.50 # rounded up from -1.41 quantile(ball_placement_quality$placement_score, 0.25)
+
+top20_receiver_ranks <- ball_placement_quality |> 
+  filter(player_position == 'WR') |> 
   group_by(player_name) |>
   summarise(
     possession_team = first(possession_team),
-    player_position = first(player_position),
     n = n(),
-    mean_placement = mean(placement_score, na.rm = TRUE)
+    difficult_targets = sum(placement_score <= lower_quartile),
+    difficult_catches = sum(placement_score <= lower_quartile & pass_result == 'C'),
+    difficult_catch_pct = round(difficult_catches / difficult_targets * 100, 2)
   ) |>
   filter(n >= 50) |>
-  arrange(mean_placement) |>
+  arrange(desc(difficult_catch_pct)) |>
   mutate(rank = row_number()) |> relocate(rank) |> 
   slice_head(n=20) |> 
   gt() |> 
@@ -171,111 +210,42 @@ bottom_receiver_ranks <- ball_placement_quality |>
       default_fonts()
     )
   ) |>
-  fmt_number(
-    columns = c(mean_placement),
-    decimals = 2,
-  ) |>
   data_color(
-    columns = c(mean_placement),
+    columns = c(difficult_catch_pct),
     colors = scales::col_numeric(
-      palette = c("#67000D", "#FEE0D2"),
+      palette = c("#FEE0D2", "#67000D"),
       domain = NULL
     )
   ) |> 
   cols_label(
     rank = md("**Rank**"),
     player_name = md("**Player**"),
-    player_position = md("**Position**"),
     possession_team = md("**Team**"),
     n = md("**Total Targeted Passes**"),
-    mean_placement = md("**Placement Score**")
+    difficult_catch_pct = md("**% Difficult Completions**"),
+    difficult_targets = md("**Difficult Passes**"),
+    difficult_catches = md("**Difficult Catches**")
   ) |> 
-  cols_align(
-    align = "center",
-    columns = everything()
-  ) |> 
-  tab_header(md("**Highest Receiver Adjustment Burden**"),
-             md("(Minimum 50 targeted passes)")) |> 
-  tab_style(style = cell_borders(sides = "top"),
-            locations = cells_title("title")) |> 
-  tab_options(
-    table.border.top.style = "a"
-  ) |> 
+  cols_align(align = "center", columns = everything()) |> 
+  tab_header(
+    md("**Top 20 WRs on Difficult Passes**"),
+    md("(Minimum 50 targeted passes)")
+    ) |> 
+  tab_style(
+    style = cell_borders(sides = "top"),
+    locations = cells_title("title")
+    ) |> 
+  tab_options(table.border.top.style = "a") |> 
   tab_footnote(
-    footnote = "Average placement score across all targeted passes",
-    locations = cells_column_labels(
-      columns = mean_placement
-    )
+    footnote = "Total number of pass targets with a placement score below the lower quartile of -1.50",
+    locations = cells_column_labels(columns = difficult_targets)
+    ) |> 
+  tab_footnote(
+    footnote = "Total number of catches for passes with a placement score below the lower quartile of -1.50",
+    locations = cells_column_labels(columns = difficult_catches)
   )
 
-gtsave(bottom_receiver_ranks, "viz/bottom_receiver_ranks.png")
-
-
-top_receiver_ranks <- ball_placement_quality |>
-  group_by(player_name) |>
-  summarise(
-    possession_team = first(possession_team),
-    player_position = first(player_position),
-    n = n(),
-    mean_placement = mean(placement_score, na.rm = TRUE)
-  ) |>
-  filter(n >= 50) |>
-  arrange(desc(mean_placement)) |>
-  mutate(rank = row_number()) |> relocate(rank) |> 
-  slice_head(n=20) |> 
-  gt() |> 
-  tab_options(
-    table.border.top.color = "white",
-    row.striping.include_table_body = FALSE
-  ) |>
-  opt_table_font(
-    font = list(
-      google_font("Chivo"),
-      default_fonts()
-    )
-  ) |>
-  fmt_number(
-    columns = c(mean_placement),
-    decimals = 2,
-  ) |>
-  data_color(
-    columns = c(mean_placement),
-    colors = scales::col_numeric(
-      palette = c("#e4e4d9", "#215f00"),
-      domain = NULL
-    )
-  ) |> 
-  cols_label(
-    rank = md("**Rank**"),
-    player_name = md("**Player**"),
-    player_position = md("**Position**"),
-    possession_team = md("**Team**"),
-    n = md("**Total Targeted Passes**"),
-    mean_placement = md("**Placement Score**")
-  ) |> 
-  cols_align(
-    align = "center",
-    columns = everything()
-  ) |> 
-  tab_header(md("**Lowest Receiver Adjustment Burden**"),
-             md("(Minimum 50 targeted passes)")) |> 
-  tab_style(style = cell_borders(sides = "top"),
-            locations = cells_title("title")) |> 
-  tab_options(
-    table.border.top.style = "a"
-  ) |> 
-  tab_footnote(
-    footnote = "Average placement score across all targeted passes",
-    locations = cells_column_labels(
-      columns = mean_placement
-    )
-  )
-
-gtsave(top_receiver_ranks, "viz/top_receiver_ranks.png")
-
-# combine qb and receiver tables
-combined <- image_append(c(image_read("viz/top_receiver_ranks.png"), image_read("viz/bottom_receiver_ranks.png")))
-image_write(combined, "viz/receiver_ranks.png")
+gtsave(top20_receiver_ranks, "viz/top20_receiver_ranks.png")
 
 ## placement score by route --------------------------------------------------------
 ball_placement_quality |>
@@ -283,8 +253,8 @@ ball_placement_quality |>
   drop_na() |> 
   summarise(
     Total = n(),
-    `Average Score` = round(mean(placement_score, na.rm = TRUE), 2)
-  ) |> arrange(desc(`Average Score`)) |> 
+    `Placement Score` = round(mean(placement_score, na.rm = TRUE), 2)
+  ) |> arrange(desc(`Placement Score`)) |> 
   rename("Receiver's Route" = "route_of_targeted_receiver") |> 
   gt()
 
@@ -295,11 +265,18 @@ ball_placement_quality |>
   drop_na() |> 
   summarise(
     Total = n(),
-    `Average Score` = round(mean(placement_score, na.rm = TRUE), 2)
-  ) |> arrange(desc(`Average Score`)) |> 
+    `Placement Score` = round(mean(placement_score, na.rm = TRUE), 2)
+  ) |> arrange(desc(`Placement Score`)) |> 
   rename("Coverage Type" = "team_coverage_man_zone") |> 
   gt()
 
+
+# ball_placement_quality |>
+#   ggplot(aes(x = placement_score, y = reorder(route_of_targeted_receiver, placement_score, FUN = median), fill = route_of_targeted_receiver)) +
+#   geom_density_ridges(alpha = 0.7, scale = 1.5, quantile_lines = TRUE, quantiles = 2) +
+#   scale_y_discrete(expand = expansion(mult = c(0.1, 0))) +
+#   theme_bw(base_size = 15) +
+#   theme(legend.position = "none")
 
 ## placement score by pass length --------------------------------------------------
 ball_placement_quality |> 
@@ -307,23 +284,23 @@ ball_placement_quality |>
     pass_bin = case_when(
       pass_length < 0 ~ 'Behind LOS',
       pass_length < 15 ~ '0-14',
-      pass_length <= 25 ~ '15-25',
-      pass_length <= 40 ~ '26-40',
+      pass_length < 25 ~ '15-24',
+      pass_length <= 39 ~ '25-39',
       TRUE ~ '40+'
     )
   ) |> 
   drop_na() |> 
-  mutate(pass_bin = factor(pass_bin, levels = c("40+", "26-40", "15-25", '0-14', 'Behind LOS'))) |> 
+  mutate(pass_bin = factor(pass_bin, levels = c("40+", "25-39", "15-24", '0-14', 'Behind LOS'))) |> 
   ggplot(aes(x = placement_score, y = pass_bin, fill = pass_bin)) +
-  geom_density_ridges(alpha = 0.7, scale = 1.5, quantile_lines = TRUE, quantiles = 2) +
+  geom_density_ridges(alpha = 0.6, scale = 1.5, quantile_lines = TRUE, quantiles = 2) + # quantile_fun = mean
   scale_y_discrete(expand = expansion(mult = c(0.1, 0))) +
   labs(
-    title = "Distribution of Placement Score by Pass Length",
+    #title = "Distribution of Placement Score by Pass Length",
     x = "Placement Score", 
     y = "Pass Length (yards)",
     caption = "Quantile line = median"
   ) +
-  theme_bw(base_size = 15) +
+  theme_bw(base_size = 17) +
   theme(legend.position = "none")
 
 

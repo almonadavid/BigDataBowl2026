@@ -134,5 +134,9 @@ ball_placement_quality <- ball_placement_quality |>
             by = c("game_id", "play_id")) |> 
   drop_na()
 
+# coerce Taysom Hill's position to TE
+ball_placement_quality <- ball_placement_quality |> mutate(player_position = ifelse(player_name == "Taysom Hill", "TE", player_position))
+
+ball_placement_quality <- left_join(ball_placement_quality, play_result, by = c("game_id", "play_id"))
 
 fwrite(ball_placement_quality, "data/ball_placement_quality.csv")
